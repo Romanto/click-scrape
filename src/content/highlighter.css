@@ -1,0 +1,205 @@
+.click-scrape-hover {
+  outline: 3px solid #2563eb !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 5px rgba(37, 99, 235, 0.55) !important;
+  cursor: crosshair !important;
+}
+
+.click-scrape-selected {
+  outline: 3px solid #16a34a !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 5px rgba(22, 163, 74, 0.55) !important;
+}
+
+#click-scrape-overlay {
+  all: initial;
+  position: fixed !important;
+  z-index: 2147483646 !important;
+  right: 16px !important;
+  bottom: 16px !important;
+  width: 360px !important;
+  max-height: 70vh !important;
+  overflow: auto !important;
+  background: #0f172a !important;
+  color: #e2e8f0 !important;
+  font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif !important;
+  border-radius: 12px !important;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+  padding: 12px !important;
+  box-sizing: border-box !important;
+}
+
+#click-scrape-overlay * {
+  box-sizing: border-box !important;
+  font: inherit !important;
+  color: inherit !important;
+}
+
+#click-scrape-overlay h2 {
+  margin: 0 0 8px !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+#click-scrape-overlay .cs-row {
+  display: flex !important;
+  gap: 6px !important;
+  flex-wrap: wrap !important;
+  margin: 8px 0 !important;
+}
+
+#click-scrape-overlay button,
+#click-scrape-overlay input {
+  all: revert;
+  font: 12px system-ui, sans-serif !important;
+}
+
+#click-scrape-overlay button {
+  background: #2563eb !important;
+  color: white !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  padding: 6px 10px !important;
+  cursor: pointer !important;
+}
+
+#click-scrape-overlay button.secondary {
+  background: #334155 !important;
+}
+
+#click-scrape-overlay button.danger {
+  background: #b91c1c !important;
+}
+
+#click-scrape-overlay input {
+  flex: 1 !important;
+  border-radius: 8px !important;
+  border: 1px solid #475569 !important;
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  padding: 6px 8px !important;
+}
+
+#click-scrape-overlay table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  margin-top: 8px !important;
+  font-size: 11px !important;
+}
+
+#click-scrape-overlay th,
+#click-scrape-overlay td {
+  border: 1px solid #334155 !important;
+  padding: 4px 6px !important;
+  text-align: left !important;
+  max-width: 140px !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#click-scrape-overlay th {
+  white-space: normal !important;
+  vertical-align: top !important;
+}
+
+#click-scrape-overlay .cs-hint {
+  opacity: 0.75 !important;
+  font-size: 12px !important;
+  margin: 0 0 6px !important;
+}
+
+#click-scrape-overlay .cs-empty {
+  margin: 8px 0 0 !important;
+  padding: 10px 8px !important;
+  font-size: 12px !important;
+  opacity: 0.85 !important;
+  background: #1e293b !important;
+  border-radius: 8px !important;
+  text-align: center !important;
+}
+
+#click-scrape-overlay ul.cs-fields {
+  list-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  max-height: 88px !important;
+  overflow: auto !important;
+}
+
+#click-scrape-overlay .cs-field {
+  margin: 0 0 6px !important;
+  padding: 4px 0 !important;
+  border-bottom: 1px solid #1e293b !important;
+}
+
+#click-scrape-overlay .cs-field-main {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+#click-scrape-overlay .cs-field-name {
+  flex: 1 !important;
+  font-weight: 700 !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#click-scrape-overlay .cs-field-sel {
+  display: block !important;
+  font-size: 10px !important;
+  opacity: 0.55 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  margin-top: 2px !important;
+}
+
+#click-scrape-overlay .cs-th {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  min-width: 0 !important;
+}
+
+#click-scrape-overlay .cs-th-name {
+  font-weight: 700 !important;
+  cursor: text !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#click-scrape-overlay .cs-th-actions {
+  display: flex !important;
+  gap: 2px !important;
+}
+
+#click-scrape-overlay .cs-th-input {
+  width: 100% !important;
+  flex: none !important;
+  padding: 2px 4px !important;
+  font-size: 11px !important;
+}
+
+#click-scrape-overlay button.cs-col-btn {
+  background: #334155 !important;
+  color: #e2e8f0 !important;
+  border-radius: 6px !important;
+  padding: 2px 6px !important;
+  line-height: 1.2 !important;
+  font-size: 11px !important;
+  min-width: 22px !important;
+}
+
+#click-scrape-overlay button.cs-col-drop {
+  background: #7f1d1d !important;
+}
+
+#click-scrape-overlay button.cs-col-btn:disabled {
+  opacity: 0.35 !important;
+  cursor: default !important;
+}

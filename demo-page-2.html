@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Click Scrape demo — Page 2</title>
+    <style>
+      body { font: 16px/1.4 system-ui, sans-serif; margin: 2rem; background: #fafafa; color: #222; }
+      h1 { margin-bottom: 0.25rem; }
+      .instructions { color: #555; max-width: 560px; margin-bottom: 1.25rem; }
+      .pagination { display: flex; gap: 0.75rem; align-items: center; margin-bottom: 1.25rem; font-size: 14px; }
+      .pagination a { color: #06c; text-decoration: none; }
+      .pagination a:hover { text-decoration: underline; }
+      .pagination .current { font-weight: 700; color: #222; }
+      .products { display: grid; gap: 12px; max-width: 520px; }
+      .product { background: #fff; border: 1px solid #ddd; border-radius: 10px; padding: 12px 14px; }
+      .card-body { display: flex; flex-direction: column; gap: 6px; }
+      .card-header { display: flex; flex-direction: column; gap: 2px; }
+      .title-wrap { padding: 2px 0; }
+      .title { font-weight: 700; }
+      .price-wrap { margin-top: 2px; }
+      .price { color: #0a7; font-variant-numeric: tabular-nums; }
+      .meta-wrap { margin-top: 4px; }
+      .meta { color: #777; font-size: 13px; }
+      .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 0; padding: 0; list-style: none; }
+      .tags li { background: #eef2f7; color: #445; font-size: 12px; padding: 2px 8px; border-radius: 999px; }
+    </style>
+  </head>
+  <body>
+    <h1>Demo product list — Page 2</h1>
+    <p class="instructions">Different products from page 1 — use pagination picking to merge both pages.</p>
+
+    <nav class="pagination" aria-label="Results pages">
+      <a href="demo.html">‹ Previous</a>
+      <a href="demo.html">1</a>
+      <span class="current">2</span>
+    </nav>
+
+    <div class="products">
+      <article class="product">
+        <div class="card-body">
+          <div class="card-header">
+            <div class="title-wrap"><span class="title">Ceramic Planter</span></div>
+            <div class="price-wrap"><span class="price">$16.75</span></div>
+          </div>
+          <div class="meta-wrap"><span class="meta">Garden</span></div>
+          <ul class="tags">
+            <li>6-inch</li>
+            <li>drainage</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="card-body">
+          <div class="card-header">
+            <div class="title-wrap"><span class="title">Noise-Cancel Headphones</span></div>
+            <div class="price-wrap"><span class="price">$89.00</span></div>
+          </div>
+          <div class="meta-wrap"><span class="meta">Audio</span></div>
+          <ul class="tags">
+            <li>wireless</li>
+            <li>folding</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="card-body">
+          <div class="card-header">
+            <div class="title-wrap"><span class="title">Mechanical Keyboard</span></div>
+            <div class="price-wrap"><span class="price">$74.99</span></div>
+          </div>
+          <div class="meta-wrap"><span class="meta">Electronics</span></div>
+          <ul class="tags">
+            <li>tenkeyless</li>
+            <li>RGB</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="card-body">
+          <div class="card-header">
+            <div class="title-wrap"><span class="title">Linen Throw Blanket</span></div>
+            <div class="price-wrap"><span class="price">$41.50</span></div>
+          </div>
+          <div class="meta-wrap"><span class="meta">Home</span></div>
+          <ul class="tags">
+            <li>king</li>
+            <li>machine-wash</li>
+          </ul>
+        </div>
+      </article>
+
+      <article class="product">
+        <div class="card-body">
+          <div class="card-header">
+            <div class="title-wrap"><span class="title">Stainless Water Bottle</span></div>
+            <div class="price-wrap"><span class="price">$27.25</span></div>
+          </div>
+          <div class="meta-wrap"><span class="meta">Outdoors</span></div>
+          <ul class="tags">
+            <li>32oz</li>
+            <li>wide-mouth</li>
+          </ul>
+        </div>
+      </article>
+    </div>
+  </body>
+</html>

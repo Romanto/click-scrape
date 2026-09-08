@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Click Scrape</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>Click Scrape</h1>
+    <p class="hint">Select elements on the page, preview rows, export CSV/JSON.</p>
+    <button id="start" type="button">Start picking</button>
+    <p id="status" class="status" hidden></p>
+    <p id="nudge" class="nudge" hidden></p>
+    <h2>Saved recipes</h2>
+    <ul id="recipes"></ul>
+    <script src="../shared/storage.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>
