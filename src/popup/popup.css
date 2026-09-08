@@ -2,7 +2,7 @@ body {
   width: 320px;
   margin: 0;
   padding: 18px;
-  font: 14px/1.5 Inter, Roboto, system-ui, -apple-system, sans-serif;
+  font: 14px/1.5 system-ui, -apple-system, Inter, Roboto, sans-serif;
   color: #2D2A4A;
   background: #ffffff;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
