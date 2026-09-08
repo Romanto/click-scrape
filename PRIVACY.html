@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nestix Privacy Policy</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            color: #333;
+            background: #f9f9f9;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 3px solid #3498db;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #34495e;
+            margin-top: 30px;
+        }
+        .meta {
+            color: #7f8c8d;
+            font-size: 0.9em;
+            margin-bottom: 20px;
+        }
+        .summary {
+            background: #e8f4f8;
+            border-left: 4px solid #3498db;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        ul {
+            padding-left: 25px;
+        }
+        li {
+            margin: 8px 0;
+        }
+        strong {
+            color: #2c3e50;
+        }
+        a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        hr {
+            border: none;
+            border-top: 1px solid #ddd;
+            margin: 30px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Nestix Privacy Policy</h1>
+        
+        <div class="meta">
+            <p><strong>Last updated:</strong> September 8, 2026</p>
+            <p><strong>Permanent URL:</strong> <a href="https://nestix.app/privacy">https://nestix.app/privacy</a><br>
+            <strong>Temporary URL:</strong> <a href="https://romanto.github.io/click-scrape/PRIVACY.html">https://romanto.github.io/click-scrape/PRIVACY.html</a></p>
+        </div>
+
+        <hr>
+
+        <h2>Introduction</h2>
+        <p>Nestix is a Chrome extension that helps you extract structured data from web pages using a visual point-and-click interface. This privacy policy explains how Nestix handles your data.</p>
+
+        <h2>What Nestix Does</h2>
+        <p>Nestix allows you to:</p>
+        <ul>
+            <li>Select elements on web pages to define data extraction patterns ("recipes")</li>
+            <li>Preview extracted data in an editable table</li>
+            <li>Export data as CSV or JSON files</li>
+            <li>Save recipes locally for reuse</li>
+        </ul>
+
+        <h2>Data Collection and Storage</h2>
+        <p><strong>All data stays on your device.</strong> Nestix:</p>
+        <ul>
+            <li><strong>Accesses page content</strong> only when you are actively picking fields or running a recipe on a web page</li>
+            <li><strong>Stores recipes locally</strong> using Chrome's <code>chrome.storage.local</code> API — recipes never leave your device</li>
+            <li><strong>Downloads exports locally</strong> — CSV and JSON files are saved to your computer's Downloads folder</li>
+            <li><strong>Does NOT upload</strong> any scraped data, recipes, or browsing information to external servers</li>
+            <li><strong>Does NOT require</strong> an account or login</li>
+            <li><strong>Does NOT sell</strong> your data to third parties</li>
+            <li><strong>Does NOT use</strong> your data for advertising purposes</li>
+            <li><strong>Does NOT implement</strong> "phone-home" soft caps or usage tracking</li>
+        </ul>
+
+        <h2>Permissions Used</h2>
+        <p>Nestix requires the following Chrome permissions:</p>
+        <ul>
+            <li><strong>activeTab</strong> — to access the content of the web page you're currently viewing when you activate picking or run a recipe</li>
+            <li><strong>scripting</strong> — to inject the picker interface and extraction logic into web pages</li>
+            <li><strong>storage</strong> — to save your recipes locally in Chrome's local storage</li>
+            <li><strong>host_permissions (optional)</strong> — to enable recipe execution on specific domains you choose</li>
+        </ul>
+        <p>These permissions are used solely to provide the core scraping functionality described above.</p>
+
+        <h2>Data Retention</h2>
+        <ul>
+            <li><strong>Recipes</strong> remain in local Chrome storage until you delete them through the extension interface or uninstall the extension</li>
+            <li><strong>Exported data</strong> remains in your Downloads folder until you delete it</li>
+            <li><strong>Uninstalling</strong> the extension removes all locally stored recipes</li>
+        </ul>
+
+        <h2>Third-Party Services</h2>
+        <p>Nestix does not integrate with or transmit data to any third-party services. The extension operates entirely on your device.</p>
+        <p><strong>Chrome Web Store:</strong> This extension is distributed through the Chrome Web Store, which is operated by Google. Google's privacy policies apply to your use of the Chrome Web Store itself. Nestix does not control or have access to any analytics or data that Google may collect through the Web Store.</p>
+
+        <h2>Children's Privacy</h2>
+        <p>Nestix is not intended for use by children under 13 years of age. We do not knowingly collect information from children under 13.</p>
+
+        <h2>Changes to This Policy</h2>
+        <p>We may update this privacy policy from time to time. Any changes will be reflected in the "Last updated" date at the top of this policy. Continued use of Nestix after changes constitutes acceptance of the updated policy.</p>
+
+        <h2>Contact</h2>
+        <p>If you have questions about this privacy policy, you can:</p>
+        <ul>
+            <li>Contact us through the email address listed in the Chrome Web Store listing</li>
+            <li>Visit <a href="https://nestix.app">https://nestix.app</a> (when live) for additional contact options</li>
+        </ul>
+
+        <hr>
+
+        <div class="summary">
+            <strong>Summary:</strong> Nestix is a local-first tool. Your scraped data and recipes stay on your device. We don't upload, track, or sell your data.
+        </div>
+    </div>
+</body>
+</html>
