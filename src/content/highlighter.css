@@ -22,7 +22,7 @@
   overflow: auto !important;
   background: #ffffff !important;
   color: #2D2A4A !important;
-  font: 13px/1.5 Inter, Roboto, system-ui, -apple-system, sans-serif !important;
+  font: 13px/1.5 system-ui, -apple-system, Inter, Roboto, sans-serif !important;
   border-radius: 12px !important;
   border: 1px solid #E5E7EB !important;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
