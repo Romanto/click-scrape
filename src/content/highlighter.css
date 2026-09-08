@@ -1,7 +1,7 @@
 .click-scrape-hover {
-  outline: 3px solid #2563eb !important;
+  outline: 3px solid #9D58E3 !important;
   outline-offset: 2px !important;
-  box-shadow: 0 0 0 1px #fff, 0 0 0 5px rgba(37, 99, 235, 0.55) !important;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 5px rgba(157, 88, 227, 0.45) !important;
   cursor: crosshair !important;
 }
 
@@ -17,16 +17,16 @@
   z-index: 2147483646 !important;
   right: 16px !important;
   bottom: 16px !important;
-  width: 360px !important;
+  width: 380px !important;
   max-height: 70vh !important;
   overflow: auto !important;
   background: #ffffff !important;
-  color: #0f172a !important;
-  font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif !important;
+  color: #2D2A4A !important;
+  font: 13px/1.5 'Inter', 'Roboto', system-ui, -apple-system, sans-serif !important;
   border-radius: 12px !important;
-  border: 1px solid #e2e8f0 !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
-  padding: 12px !important;
+  border: 1px solid #E5E7EB !important;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1), 0 2px 8px rgba(0, 0, 0, 0.06) !important;
+  padding: 16px !important;
   box-sizing: border-box !important;
 }
 
@@ -37,10 +37,10 @@
 }
 
 #click-scrape-overlay h2 {
-  margin: 0 0 8px !important;
-  font-size: 14px !important;
+  margin: 0 0 10px !important;
+  font-size: 16px !important;
   font-weight: 700 !important;
-  color: #0f172a !important;
+  color: #2D2A4A !important;
 }
 
 #click-scrape-overlay .cs-row {
@@ -57,31 +57,61 @@
 }
 
 #click-scrape-overlay button {
-  background: #2563eb !important;
+  background: #9D58E3 !important;
   color: white !important;
   border: 0 !important;
   border-radius: 8px !important;
-  padding: 6px 10px !important;
+  padding: 7px 12px !important;
   cursor: pointer !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 6px rgba(157, 88, 227, 0.2) !important;
+  transition: all 0.15s ease !important;
+}
+
+#click-scrape-overlay button:hover {
+  background: #8B47D1 !important;
+  box-shadow: 0 3px 8px rgba(157, 88, 227, 0.3) !important;
 }
 
 #click-scrape-overlay button.secondary {
-  background: #e2e8f0 !important;
-  color: #0f172a !important;
+  background: #ffffff !important;
+  color: #2D2A4A !important;
+  border: 1.5px solid #E5E7EB !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05) !important;
+}
+
+#click-scrape-overlay button.secondary:hover {
+  background: #F8F4FF !important;
+  border-color: #9D58E3 !important;
+  color: #9D58E3 !important;
 }
 
 #click-scrape-overlay button.danger {
-  background: #fee2e2 !important;
-  color: #991b1b !important;
+  background: #ffffff !important;
+  color: #EF4444 !important;
+  border: 1.5px solid #FEE2E2 !important;
+  box-shadow: 0 2px 6px rgba(239, 68, 68, 0.08) !important;
+}
+
+#click-scrape-overlay button.danger:hover {
+  background: #FEF2F2 !important;
+  border-color: #FECACA !important;
 }
 
 #click-scrape-overlay input {
   flex: 1 !important;
   border-radius: 8px !important;
-  border: 1px solid #e2e8f0 !important;
+  border: 1.5px solid #E5E7EB !important;
   background: #ffffff !important;
-  color: #0f172a !important;
-  padding: 6px 8px !important;
+  color: #2D2A4A !important;
+  padding: 7px 10px !important;
+  transition: all 0.15s ease !important;
+}
+
+#click-scrape-overlay input:focus {
+  outline: none !important;
+  border-color: #9D58E3 !important;
+  box-shadow: 0 0 0 3px rgba(157, 88, 227, 0.1) !important;
 }
 
 #click-scrape-overlay table {
@@ -93,36 +123,39 @@
 
 #click-scrape-overlay th,
 #click-scrape-overlay td {
-  border: 1px solid #e2e8f0 !important;
-  padding: 4px 6px !important;
+  border: 1px solid #E5E7EB !important;
+  padding: 6px 8px !important;
   text-align: left !important;
   max-width: 140px !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-  color: #0f172a !important;
+  color: #2D2A4A !important;
 }
 
 #click-scrape-overlay th {
   white-space: normal !important;
   vertical-align: top !important;
-  background: #f1f5f9 !important;
+  background: #F8F4FF !important;
+  font-weight: 600 !important;
+  color: #9D58E3 !important;
 }
 
 #click-scrape-overlay .cs-hint {
-  color: #64748b !important;
+  color: #6B7280 !important;
   font-size: 12px !important;
-  margin: 0 0 6px !important;
+  margin: 0 0 10px !important;
 }
 
 #click-scrape-overlay .cs-empty {
-  margin: 8px 0 0 !important;
-  padding: 10px 8px !important;
+  margin: 10px 0 0 !important;
+  padding: 12px 10px !important;
   font-size: 12px !important;
-  color: #64748b !important;
-  background: #f8fafc !important;
+  color: #6B7280 !important;
+  background: #F9FAFB !important;
   border-radius: 8px !important;
   text-align: center !important;
+  border: 1px solid #E5E7EB !important;
 }
 
 #click-scrape-overlay ul.cs-fields {
@@ -134,9 +167,9 @@
 }
 
 #click-scrape-overlay .cs-field {
-  margin: 0 0 6px !important;
-  padding: 4px 0 !important;
-  border-bottom: 1px solid #e2e8f0 !important;
+  margin: 0 0 8px !important;
+  padding: 6px 0 !important;
+  border-bottom: 1px solid #E5E7EB !important;
 }
 
 #click-scrape-overlay .cs-field-main {
@@ -157,11 +190,11 @@
 #click-scrape-overlay .cs-field-sel {
   display: block !important;
   font-size: 10px !important;
-  color: #64748b !important;
+  color: #6B7280 !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-  margin-top: 2px !important;
+  margin-top: 3px !important;
 }
 
 #click-scrape-overlay .cs-th {
@@ -192,18 +225,32 @@
 }
 
 #click-scrape-overlay button.cs-col-btn {
-  background: #e2e8f0 !important;
-  color: #0f172a !important;
+  background: #F3F4F6 !important;
+  color: #2D2A4A !important;
+  border: 1px solid #E5E7EB !important;
   border-radius: 6px !important;
-  padding: 2px 6px !important;
+  padding: 3px 7px !important;
   line-height: 1.2 !important;
   font-size: 11px !important;
-  min-width: 22px !important;
+  min-width: 24px !important;
+  box-shadow: none !important;
+}
+
+#click-scrape-overlay button.cs-col-btn:hover {
+  background: #F8F4FF !important;
+  border-color: #9D58E3 !important;
+  color: #9D58E3 !important;
 }
 
 #click-scrape-overlay button.cs-col-drop {
-  background: #fee2e2 !important;
-  color: #991b1b !important;
+  background: #FEF2F2 !important;
+  color: #EF4444 !important;
+  border: 1px solid #FEE2E2 !important;
+}
+
+#click-scrape-overlay button.cs-col-drop:hover {
+  background: #FEE2E2 !important;
+  border-color: #FECACA !important;
 }
 
 #click-scrape-overlay button.cs-col-btn:disabled {
