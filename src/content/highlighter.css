@@ -20,11 +20,12 @@
   width: 360px !important;
   max-height: 70vh !important;
   overflow: auto !important;
-  background: #0f172a !important;
-  color: #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
   font: 13px/1.4 system-ui, -apple-system, Segoe UI, sans-serif !important;
   border-radius: 12px !important;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08) !important;
   padding: 12px !important;
   box-sizing: border-box !important;
 }
@@ -39,6 +40,7 @@
   margin: 0 0 8px !important;
   font-size: 14px !important;
   font-weight: 700 !important;
+  color: #0f172a !important;
 }
 
 #click-scrape-overlay .cs-row {
@@ -64,19 +66,21 @@
 }
 
 #click-scrape-overlay button.secondary {
-  background: #334155 !important;
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
 #click-scrape-overlay button.danger {
-  background: #b91c1c !important;
+  background: #fee2e2 !important;
+  color: #991b1b !important;
 }
 
 #click-scrape-overlay input {
   flex: 1 !important;
   border-radius: 8px !important;
-  border: 1px solid #475569 !important;
-  background: #1e293b !important;
-  color: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
   padding: 6px 8px !important;
 }
 
@@ -89,22 +93,24 @@
 
 #click-scrape-overlay th,
 #click-scrape-overlay td {
-  border: 1px solid #334155 !important;
+  border: 1px solid #e2e8f0 !important;
   padding: 4px 6px !important;
   text-align: left !important;
   max-width: 140px !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
+  color: #0f172a !important;
 }
 
 #click-scrape-overlay th {
   white-space: normal !important;
   vertical-align: top !important;
+  background: #f1f5f9 !important;
 }
 
 #click-scrape-overlay .cs-hint {
-  opacity: 0.75 !important;
+  color: #64748b !important;
   font-size: 12px !important;
   margin: 0 0 6px !important;
 }
@@ -113,8 +119,8 @@
   margin: 8px 0 0 !important;
   padding: 10px 8px !important;
   font-size: 12px !important;
-  opacity: 0.85 !important;
-  background: #1e293b !important;
+  color: #64748b !important;
+  background: #f8fafc !important;
   border-radius: 8px !important;
   text-align: center !important;
 }
@@ -130,7 +136,7 @@
 #click-scrape-overlay .cs-field {
   margin: 0 0 6px !important;
   padding: 4px 0 !important;
-  border-bottom: 1px solid #1e293b !important;
+  border-bottom: 1px solid #e2e8f0 !important;
 }
 
 #click-scrape-overlay .cs-field-main {
@@ -151,7 +157,7 @@
 #click-scrape-overlay .cs-field-sel {
   display: block !important;
   font-size: 10px !important;
-  opacity: 0.55 !important;
+  color: #64748b !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
@@ -186,8 +192,8 @@
 }
 
 #click-scrape-overlay button.cs-col-btn {
-  background: #334155 !important;
-  color: #e2e8f0 !important;
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
   border-radius: 6px !important;
   padding: 2px 6px !important;
   line-height: 1.2 !important;
@@ -196,7 +202,8 @@
 }
 
 #click-scrape-overlay button.cs-col-drop {
-  background: #7f1d1d !important;
+  background: #fee2e2 !important;
+  color: #991b1b !important;
 }
 
 #click-scrape-overlay button.cs-col-btn:disabled {
