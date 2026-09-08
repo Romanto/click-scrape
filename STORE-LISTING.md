@@ -89,7 +89,7 @@ Extract structured data from web pages the user selects, using point-and-click f
 
 ### Privacy Policy URL
 **Temporary (GitHub Pages):**  
-https://romanto.github.io/click-scrape/privacy.html
+https://romanto.github.io/click-scrape/PRIVACY.html
 
 **Permanent (when live):**  
 https://nestix.app/privacy

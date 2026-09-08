@@ -3,7 +3,7 @@
 **Last updated:** September 8, 2026
 
 **Permanent URL:** https://nestix.app/privacy  
-**Temporary URL:** https://romanto.github.io/click-scrape/privacy.html
+**Temporary URL:** https://romanto.github.io/click-scrape/PRIVACY.html
 
 ---
 
