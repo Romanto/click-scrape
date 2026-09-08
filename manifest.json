@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Click Scrape",
+  "name": "Nestix",
   "version": "0.1.0",
   "description": "Point-and-click visual web scraper — select elements, preview rows, export CSV/JSON.",
   "icons": {
@@ -10,7 +10,7 @@
   },
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "Click Scrape",
+    "default_title": "Nestix",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
