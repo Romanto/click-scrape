@@ -27,7 +27,7 @@
     el = document.createElement("div");
     el.id = "click-scrape-overlay";
     el.innerHTML = `
-      <h2>Click Scrape</h2>
+      <h2>Nestix</h2>
       <p class="cs-hint">Hover and click elements to add columns. Esc cancels.</p>
       <div class="cs-row">
         <input id="cs-field-name" placeholder="Column name (e.g. Title)" />
