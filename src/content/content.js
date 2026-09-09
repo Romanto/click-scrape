@@ -220,7 +220,7 @@
       rows: NS.extract.extractRows(currentRecipe()),
     };
     state.rows = result.rows || [];
-    if (result.items?.length) highlightRetrievedItems(result.items);
+    highlightRetrievedItems(result.items || []);
     applyColumnView();
   }
 
