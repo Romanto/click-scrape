@@ -11,6 +11,8 @@
 
   function stableClasses(el) {
     if (!el?.classList) return [];
+    // Filter out extension-injected classes (click-scrape-*) and ESP browser extension classes (esp-*)
+    // to ensure clean, stable selectors that work across sessions and extension states.
     return [...el.classList].filter((c) => c && !c.startsWith("click-scrape-") && !c.startsWith("esp-"));
   }
 
@@ -145,6 +147,8 @@
    */
   function getSimilarScopeRoot(element) {
     if (!element?.closest) return null;
+    // Amazon product detail pages use these known feature-bullet container IDs.
+    // Scoping to these containers prevents highlighting unrelated .a-list-item spans elsewhere on the page.
     const byId = element.closest(
       '#featurebullets_feature_div, #feature-bullets-bullet-list, ' +
         '[id*="featurebullets_feature"], [id*="feature-bullets"], [id*="detailBullets_feature"]'
