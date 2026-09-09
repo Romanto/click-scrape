@@ -27,6 +27,8 @@
   let similarHintNodes = [];
   /** @type {Element[]} */
   let retrievedItemNodes = [];
+  // TODO: Consider throttling onMouseMove with requestAnimationFrame for performance on complex pages.
+  // Current direct handler works well for typical list pages but may lag on heavy DOM trees.
 
   function isOverlay(el) {
     return !!(el && (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")));
