@@ -23,14 +23,33 @@
 
   let walkController = null;
   let walkGeneration = 0;
+  /** @type {Element[]} */
+  let similarHintNodes = [];
 
   function isOverlay(el) {
     return !!(el && (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")));
   }
 
+  function clearSimilarHints() {
+    similarHintNodes.forEach((node) => {
+      node?.classList?.remove("click-scrape-similar");
+    });
+    similarHintNodes = [];
+  }
+
+  function applySimilarHints(peers) {
+    clearSimilarHints();
+    for (const el of peers || []) {
+      if (!(el instanceof Element) || el === state.hoverEl) continue;
+      el.classList.add("click-scrape-similar");
+      similarHintNodes.push(el);
+    }
+  }
+
   function clearHover() {
     state.hoverEl?.classList.remove("click-scrape-hover");
     state.hoverEl = null;
+    clearSimilarHints();
   }
 
   function onMouseMove(e) {
@@ -40,6 +59,8 @@
     clearHover();
     state.hoverEl = el;
     el.classList.add("click-scrape-hover");
+    const peers = NS.selectors.findSimilarPeers?.(el) || [];
+    applySimilarHints(peers);
   }
 
   function onClick(e) {
@@ -340,6 +361,8 @@
     state.walking = false;
     clearHover();
     document.querySelectorAll(".click-scrape-selected").forEach((el) => el.classList.remove("click-scrape-selected"));
+    document.querySelectorAll(".click-scrape-similar").forEach((el) => el.classList.remove("click-scrape-similar"));
+    similarHintNodes = [];
     document.removeEventListener("mousemove", onMouseMove, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
