@@ -40,12 +40,14 @@ Paste this into Cursor agents as the working brief. Repo/scaffold: `click-scrape
 
 | Area | Owns | Notes |
 |------|------|--------|
-| `src/content/` | pick, highlight, pagination walk, overlay UI | `content.js`, `picker-overlay.js`, `highlighter.css` |
-| `src/shared/` | pure helpers | `selectors.js`, `extract.js`, `export.js`, `storage.js` \u2014 keep testable, no DOM chrome |
+| `src/content/` | pick, highlight, pagination walk, overlay UI | `content.js`, `picker-overlay.js`, `highlighter.css` — hover also paints `.click-scrape-similar` peers |
+| `src/shared/` | pure helpers | `selectors.js` (incl. `findSimilarPeers` / `getSimilarScopeRoot`), `extract.js`, `export.js`, `storage.js`, `pagination.js`, `columns.js` — keep testable, no DOM chrome |
 | `src/popup/` | start picking + recipe list | thin; preview/export live primarily on overlay for MVP |
 | `src/background/service-worker.js` | messaging only | no scrape logic |
 | `demo.html` | local fixture | first acceptance surface |
 | `manifest.json` | MV3 | permissions stay minimal: `activeTab`, `scripting`, `storage`, host as needed |
+
+**Agent handoff:** see [AGENTS.md](AGENTS.md) for post-MVP contracts (similar-peer hover, column model, pagination, soft cap).
 
 **Data path:** page \u2192 content extract \u2192 in-memory rows \u2192 export / local storage. Never network for scraped data.
 
@@ -236,8 +238,9 @@ Owner: Developer. Do not start step 3 until 1\u20132 acceptance passes on `demo.
 - Prefer **item-relative** paths (`:scope \u2026`) from a detected list root; avoid absolute `cssPath` that breaks when ads/chrome shift.
 - Nested/card layouts: detect repeating item containers (same tag + similar class/structure siblings), then resolve each field relative to the item \u2014 not the page.
 - When the user clicks a deep node (e.g. title inside a card), walk up to the repeating item ancestor before generating `relativeSelector`.
+- **Similar-peer hover (shipped):** `findSimilarPeers(el)` outlines sibling peers in a **scoped** list region (not site-wide class matches). Wired from `content.js` hover → `.click-scrape-similar`. Keep scope + peer logic in `selectors.js`; see [AGENTS.md](AGENTS.md).
 - Acceptance fixtures: `demo.html` plus **2 live card-style sites** (e.g. a product grid and a results/cards list). Same recipe after reload must rematch the same columns.
-- Add/extend pure unit-style checks in `shared/` where possible (selector generation + extract given a fixture DOM string or jsdom-free helpers); prove interactively on `demo.html` either way.
+- Add/extend pure unit-style checks in `shared/` where possible (selector generation + extract given a fixture DOM string or jsdom-free helpers); prove interactively on `demo.html` either way. Tests for peers: `tests/fixtures/noisy-bullets.html`.
 
 ### Step 2 \u2014 pagination + row merge (`content.js` + shared extract)
 

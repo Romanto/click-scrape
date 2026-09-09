@@ -4,13 +4,14 @@
   const MAX_WALK = 12;
   const MAX_CLASSES = 3;
   const SIMILARITY_MIN = 0.4;
+  const MAX_SIMILAR_PEERS = 80;
   const ITEM_CLASS_HINT = /(product|card|item|result|row|listing|entry|post|tile|record)/i;
   const SEMANTIC_ITEMS = new Set(["ARTICLE", "LI", "TR", "SECTION"]);
   const LAYOUT_TAGS = new Set(["HEADER", "NAV", "FOOTER", "ASIDE", "MAIN", "BODY", "HTML"]);
 
   function stableClasses(el) {
     if (!el?.classList) return [];
-    return [...el.classList].filter((c) => c && !c.startsWith("click-scrape-"));
+    return [...el.classList].filter((c) => c && !c.startsWith("click-scrape-") && !c.startsWith("esp-"));
   }
 
   function classSuffix(names) {
@@ -138,6 +139,183 @@
     return score;
   }
 
+  /**
+   * Narrow "similar" to a subtree so site-wide classes (e.g. Amazon `.a-list-item`)
+   * only count peers in the same list region.
+   */
+  function getSimilarScopeRoot(element) {
+    if (!element?.closest) return null;
+    const byId = element.closest(
+      '#featurebullets_feature_div, #feature-bullets-bullet-list, ' +
+        '[id*="featurebullets_feature"], [id*="feature-bullets"], [id*="detailBullets_feature"]'
+    );
+    if (byId) return byId;
+
+    let el = element;
+    for (let d = 0; d < 10 && el; d += 1) {
+      if (el.tagName === "UL" || el.tagName === "OL") {
+        let liDirect = 0;
+        for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
+          if (c.tagName === "LI") liDirect += 1;
+        }
+        if (liDirect >= 2) return el;
+      }
+      el = el.parentElement;
+    }
+    return element.closest('#centerCol, #dp, #dp-container, main, [role="main"]') || document.documentElement;
+  }
+
+  function filterNodesToScope(nodes, scopeRoot) {
+    if (!scopeRoot || !nodes?.length) return nodes || [];
+    return nodes.filter((n) => n?.nodeType === Node.ELEMENT_NODE && scopeRoot.contains(n));
+  }
+
+  /** Short CSS candidates for peer matching — no :nth-of-type (those are unique paths). */
+  function peerSelectorCandidates(el) {
+    if (!(el instanceof Element)) return [];
+    const tag = el.tagName.toLowerCase();
+    const classes = stableClasses(el);
+    const out = [];
+    const push = (sel) => {
+      if (sel && !out.includes(sel)) out.push(sel);
+    };
+    if (classes.length) {
+      push(tag + classSuffix(classes.slice(0, MAX_CLASSES)));
+      push(tag + classSuffix(classes.slice(0, 2)));
+      push(tag + classSuffix(classes.slice(0, 1)));
+      push(classSuffix(classes.slice(0, 2)));
+      push(classSuffix(classes.slice(0, 1)));
+    }
+    push(partFor(el, { allowNth: false }));
+    if (SEMANTIC_ITEMS.has(el.tagName) || ITEM_CLASS_HINT.test(classes.join(" "))) {
+      push(tag);
+    }
+    return out;
+  }
+
+  function querySelectorAllSafe(root, selector) {
+    try {
+      return [...(root || document).querySelectorAll(selector)];
+    } catch {
+      return [];
+    }
+  }
+
+  function innermostMatchRoot(nodes, element) {
+    const cand = nodes.filter(
+      (n) => n.nodeType === Node.ELEMENT_NODE && (n === element || n.contains(element))
+    );
+    if (!cand.length) return null;
+    let deepest = cand[0];
+    for (let i = 1; i < cand.length; i += 1) {
+      const n = cand[i];
+      if (deepest.contains(n) && n !== deepest) deepest = n;
+    }
+    return deepest;
+  }
+
+  /**
+   * Prefer the selector with the smallest match count in [2, MAX] inside the scope
+   * (tight peer group), even when the unique nth path would only match one node.
+   */
+  function pickPeerSelectorAtElement(element) {
+    if (!(element instanceof Element)) return null;
+    const scopeRoot = getSimilarScopeRoot(element);
+    if (!scopeRoot) return null;
+    const list = peerSelectorCandidates(element);
+    let best = null;
+    let bestCount = Infinity;
+    for (const value of list) {
+      const nodes = filterNodesToScope(querySelectorAllSafe(scopeRoot, value), scopeRoot);
+      if (!innermostMatchRoot(nodes, element)) continue;
+      const total = nodes.length;
+      if (total < 2 || total > MAX_SIMILAR_PEERS) continue;
+      if (total < bestCount) {
+        bestCount = total;
+        best = value;
+      }
+    }
+    return best;
+  }
+
+  /** Try the node, then walk up so an inner hit can still group via a parent row selector. */
+  function pickPeerSelector(element) {
+    let el = element;
+    for (let depth = 0; depth < 5 && el && el !== document.body; depth += 1) {
+      const pref = pickPeerSelectorAtElement(el);
+      if (pref) return { selector: pref, at: el };
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  /**
+   * Direct &lt;li&gt; children of the innermost ul/ol in scope that contains `element`.
+   * Fallback when CSS peer selectors fail (noisy shared classes).
+   */
+  function computeSiblingListGroupElements(element) {
+    if (!element?.closest) return [];
+    const scopeRoot = getSimilarScopeRoot(element);
+    if (!scopeRoot || !scopeRoot.contains(element)) return [];
+    let el = element;
+    for (let depth = 0; depth < 24 && el; depth += 1) {
+      el = el.parentElement;
+      if (!el || !scopeRoot.contains(el)) break;
+      if (el.tagName !== "UL" && el.tagName !== "OL") continue;
+      const items = [];
+      for (let c = el.firstElementChild; c; c = c.nextElementSibling) {
+        if (c.tagName === "LI") items.push(c);
+      }
+      if (items.length < 2) continue;
+      if (!items.some((item) => item === element || item.contains(element))) continue;
+      return items;
+    }
+    return [];
+  }
+
+  function peersShareParent(peers) {
+    if (!peers.length) return null;
+    const parent = peers[0].parentElement;
+    if (!parent) return null;
+    if (!peers.every((p) => p.parentElement === parent)) return null;
+    return parent;
+  }
+
+  function candidateFromPeers(fieldEl, peers) {
+    if (!peers || peers.length < 2) return null;
+    const item = peers.find((p) => p === fieldEl || p.contains(fieldEl));
+    if (!item) return null;
+    const root = peersShareParent(peers) || item.parentElement;
+    if (!root) return null;
+    const items = peersShareParent(peers)
+      ? peers
+      : [...root.children].filter((c) => peers.includes(c) || similarity(c, item) >= SIMILARITY_MIN);
+    if (items.length < 2) return null;
+    return { item, root, items };
+  }
+
+  /**
+   * Similar peers for hover highlighting (exclude the hovered node / its match root).
+   * Strategy: scoped non-unique CSS selector, then sibling &lt;li&gt; list.
+   */
+  function findSimilarPeers(element) {
+    if (!(element instanceof Element)) return [];
+    const picked = pickPeerSelector(element);
+    if (picked) {
+      const scopeRoot = getSimilarScopeRoot(element);
+      const all = filterNodesToScope(querySelectorAllSafe(scopeRoot, picked.selector), scopeRoot);
+      const root = innermostMatchRoot(all, element);
+      if (root && all.length >= 2) {
+        return all.filter((el) => el !== element && el !== root && el.nodeType === Node.ELEMENT_NODE);
+      }
+    }
+    const sib = computeSiblingListGroupElements(element);
+    if (sib.length < 2) return [];
+    const row = sib.find((item) => item === element || item.contains(element));
+    if (!row) return [];
+    return sib.filter((item) => item !== row);
+  }
+
   function collectCandidates(fieldEl) {
     const candidates = [];
     let node = fieldEl;
@@ -153,6 +331,27 @@
       }
       node = parent;
     }
+
+    // Selector-peer strategy (refineNetSelector-style): tight non-unique CSS matches in scope.
+    let el = fieldEl;
+    for (let depth = 0; depth < 5 && el && el !== document.body; depth += 1) {
+      const pref = pickPeerSelectorAtElement(el);
+      if (pref) {
+        const scopeRoot = getSimilarScopeRoot(fieldEl);
+        const nodes = filterNodesToScope(querySelectorAllSafe(scopeRoot, pref), scopeRoot);
+        const item = innermostMatchRoot(nodes, fieldEl);
+        if (item) {
+          const fromPeers = candidateFromPeers(fieldEl, nodes);
+          if (fromPeers) candidates.push(fromPeers);
+        }
+      }
+      el = el.parentElement;
+    }
+
+    const siblingLis = computeSiblingListGroupElements(fieldEl);
+    const fromLis = candidateFromPeers(fieldEl, siblingLis);
+    if (fromLis) candidates.push(fromLis);
+
     return candidates;
   }
 
@@ -319,5 +518,12 @@
     return trimmed;
   }
 
-  NS.selectors = { cssPath, findListContext, relativeSelector, queryItems };
+  NS.selectors = {
+    cssPath,
+    findListContext,
+    relativeSelector,
+    queryItems,
+    findSimilarPeers,
+    getSimilarScopeRoot,
+  };
 })();

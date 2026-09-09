@@ -82,4 +82,54 @@ describe("selectors", () => {
 
     assert.equal(items.length, 0, "must return no items when selector matches nothing");
   });
+
+  it("findSimilarPeers scopes site-wide classes to the local list region", () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const span = document.querySelector("#featurebullets_feature_div .a-list-item");
+    assert.ok(span);
+
+    const scope = CS.selectors.getSimilarScopeRoot(span);
+    assert.equal(scope?.id, "featurebullets_feature_div");
+
+    const peers = CS.selectors.findSimilarPeers(span);
+    assert.equal(peers.length, 2, "only other bullets in the feature list, not page-wide noise");
+    assert.ok(
+      peers.every((p) => scope.contains(p)),
+      "peers must stay inside the scoped feature-bullets root"
+    );
+  });
+
+  it("findSimilarPeers falls back to sibling li rows under ul/ol", () => {
+    // Unique classes so CSS peer matching fails; only the ul/ol sibling path remains.
+    const html = `<main>
+      <ul id="plain-list">
+        <li><span class="unique-a">Alpha</span></li>
+        <li><span class="unique-b">Beta</span></li>
+        <li><span class="unique-c">Gamma</span></li>
+      </ul>
+    </main>`;
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const span = document.querySelector("#plain-list li span");
+    const peers = CS.selectors.findSimilarPeers(span);
+
+    assert.equal(peers.length, 2);
+    assert.ok(peers.every((p) => p.tagName === "LI"));
+  });
+
+  it("findListContext uses scoped peers for noisy bullet lists", () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const span = document.querySelector("#featurebullets_feature_div .a-list-item");
+    const ctx = CS.selectors.findListContext(span);
+
+    assert.ok(ctx.items.length >= 2);
+    assert.ok(
+      ctx.items.every((item) => document.getElementById("featurebullets_feature_div").contains(item)),
+      "list items must not include unrelated page-wide .a-list-item nodes"
+    );
+  });
 });

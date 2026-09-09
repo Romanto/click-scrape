@@ -23,14 +23,52 @@
 
   let walkController = null;
   let walkGeneration = 0;
+  /** @type {Element[]} */
+  let similarHintNodes = [];
+  /** @type {Element[]} */
+  let retrievedItemNodes = [];
 
   function isOverlay(el) {
     return !!(el && (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")));
   }
 
+  function clearSimilarHints() {
+    similarHintNodes.forEach((node) => {
+      node?.classList?.remove("click-scrape-similar");
+    });
+    similarHintNodes = [];
+  }
+
+  function clearRetrievedItems() {
+    retrievedItemNodes.forEach((node) => {
+      node?.classList?.remove("click-scrape-item");
+    });
+    retrievedItemNodes = [];
+  }
+
+  function highlightRetrievedItems(items) {
+    clearRetrievedItems();
+    for (const el of items || []) {
+      if (!(el instanceof Element)) continue;
+      el.classList.add("click-scrape-item");
+      retrievedItemNodes.push(el);
+    }
+  }
+
+  function applySimilarHints(peers) {
+    clearSimilarHints();
+    for (const el of peers || []) {
+      if (!(el instanceof Element) || el === state.hoverEl) continue;
+      if (el.classList.contains("click-scrape-item")) continue;
+      el.classList.add("click-scrape-similar");
+      similarHintNodes.push(el);
+    }
+  }
+
   function clearHover() {
     state.hoverEl?.classList.remove("click-scrape-hover");
     state.hoverEl = null;
+    clearSimilarHints();
   }
 
   function onMouseMove(e) {
@@ -40,6 +78,8 @@
     clearHover();
     state.hoverEl = el;
     el.classList.add("click-scrape-hover");
+    const peers = NS.selectors.findSimilarPeers?.(el) || [];
+    applySimilarHints(peers);
   }
 
   function onClick(e) {
@@ -167,12 +207,18 @@
     if (!state.fields.length || !state.rootSelector) {
       state.rows = [];
       state.walked = false;
+      clearRetrievedItems();
       NS.overlay.renderFields(state.fields);
       NS.overlay.renderPreview([], []);
       return;
     }
     state.walked = false;
-    state.rows = NS.extract.extractRows(currentRecipe());
+    const result = NS.extract.retrieve?.(currentRecipe()) || {
+      items: NS.extract.retrieveItems?.(currentRecipe()) || [],
+      rows: NS.extract.extractRows(currentRecipe()),
+    };
+    state.rows = result.rows || [];
+    if (result.items?.length) highlightRetrievedItems(result.items);
     applyColumnView();
   }
 
@@ -339,7 +385,11 @@
     state.active = false;
     state.walking = false;
     clearHover();
+    clearRetrievedItems();
     document.querySelectorAll(".click-scrape-selected").forEach((el) => el.classList.remove("click-scrape-selected"));
+    document.querySelectorAll(".click-scrape-similar").forEach((el) => el.classList.remove("click-scrape-similar"));
+    document.querySelectorAll(".click-scrape-item").forEach((el) => el.classList.remove("click-scrape-item"));
+    similarHintNodes = [];
     document.removeEventListener("mousemove", onMouseMove, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
@@ -355,7 +405,12 @@
       : state.fields.map((f) => f.name);
     state.hiddenColumns = Array.isArray(recipe.hiddenColumns) ? recipe.hiddenColumns.slice() : [];
     state.walked = false;
-    state.rows = NS.extract.extractRows(recipe);
+    const result = NS.extract.retrieve?.(recipe) || {
+      items: [],
+      rows: NS.extract.extractRows(recipe),
+    };
+    state.rows = result.rows || [];
+    highlightRetrievedItems(result.items || []);
     NS.overlay.ensureOverlay();
     bindOverlay();
     applyColumnView();
