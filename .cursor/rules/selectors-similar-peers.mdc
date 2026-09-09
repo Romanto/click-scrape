@@ -1,0 +1,19 @@
+---
+description: Scoped similar-peer hover and selector contracts for the picker
+globs: src/shared/selectors.js,src/content/content.js,src/content/highlighter.css,tests/selectors.test.mjs,tests/fixtures/**
+alwaysApply: false
+---
+
+# Selectors and similar-peer hover
+
+Full agent handoff: [AGENTS.md](../../AGENTS.md).
+
+When editing list detection or hover highlight:
+
+- Use `ClickScrape.selectors.findSimilarPeers(el)` and `getSimilarScopeRoot(el)` — do not invent a second peer algorithm in `content.js`.
+- Scope peers to the local list region before any class-based `querySelectorAll`. Site-wide classes (e.g. `.a-list-item`) must not highlight the whole page.
+- Prefer non-unique CSS peer selectors inside the scope; fall back to sibling `<li>` under `ul`/`ol`. Never use `:nth-of-type` paths to find “similar” nodes.
+- Hover wiring lives in `content.js` (`click-scrape-similar`); styles in `highlighter.css`. Filter `click-scrape-*` / `esp-*` out of generated selectors.
+- Keep `findListContext` aligned with the same scoped peer / sibling-li candidates.
+- Extend `tests/selectors.test.mjs` + `tests/fixtures/noisy-bullets.html` (or new fixtures) when changing peer scope rules.
+- Fields stay item-relative (`:scope …`). `queryItems` with an explicit selector returns CSS matches only (empty allowed).

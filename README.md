@@ -21,11 +21,13 @@ A Load-unpacked zip is `click-scrape-unpacked.zip` (`bash scripts/pack-unpacked.
 ## What’s included
 
 - Manifest V3 extension
-- Content-script picker with hover highlight
+- Content-script picker with hover highlight and **scoped similar-peer** outlines
 - List/sibling detection (heuristic)
 - CSV + JSON export
 - Recipe save/load via `chrome.storage.local`
 - Local `demo.html` for a safe first try
+
+Agent / architecture notes for contributors: [AGENTS.md](AGENTS.md).
 
 ## Limits (v0)
 
