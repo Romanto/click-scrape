@@ -114,16 +114,6 @@
     state.hiddenColumns = picked.hiddenColumns;
     el.classList.add("click-scrape-selected");
     if (nameInput) nameInput.value = "";
-
-    // Live retrieve from discovered peers when list context is fresh; else selector re-query.
-    const live = NS.extract.retrieveFromElement?.(el, state.fields);
-    if (live?.items?.length && (!state.rootSelector || live.recipe.rootSelector === state.rootSelector)) {
-      if (!state.rootSelector) {
-        state.rootSelector = live.recipe.rootSelector;
-        state.itemSelector = live.recipe.itemSelector;
-      }
-      highlightRetrievedItems(live.items);
-    }
     refreshUi();
   }
 

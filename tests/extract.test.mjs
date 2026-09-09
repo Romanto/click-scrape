@@ -92,4 +92,49 @@ describe("extract", () => {
     assert.equal(rows.length, 3);
     assert.deepEqual(Object.keys(rows[0]), ["Title", "Price"]);
   });
+
+  it("retrieveItems resolves the repeating card nodes from a recipe", () => {
+    const items = ClickScrape.extract.retrieveItems(recipe, doc);
+    assert.equal(items.length, 3);
+    assert.ok(items.every((el) => el.matches?.("article.product") || el.classList?.contains("product")));
+  });
+
+  it("retrieve returns items and rows together", () => {
+    const result = ClickScrape.extract.retrieve(recipe, doc);
+    assert.equal(result.items.length, 3);
+    assert.equal(result.rows.length, 3);
+    assert.equal(result.source, "selectors");
+    assert.equal(result.rows[0].Title, "Acme Notebook");
+  });
+
+  it("retrieveFromElement uses live list context peers", () => {
+    const titleEl = doc.querySelector(".products .title");
+    const fields = recipe.fields;
+    const result = ClickScrape.extract.retrieveFromElement(titleEl, fields, doc);
+
+    assert.equal(result.source, "live");
+    assert.ok(result.items.length >= 2);
+    assert.equal(result.rows.length, result.items.length);
+    assert.ok(result.rows.every((row) => row.Title && row.Price));
+  });
+
+  it("retrieveFromElement works on scoped noisy bullet lists", () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { window, document: noisyDoc } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const span = noisyDoc.querySelector("#featurebullets_feature_div .a-list-item");
+    const result = CS.extract.retrieveFromElement(
+      span,
+      [{ name: "Text", relativeSelector: ":scope" }],
+      noisyDoc
+    );
+
+    assert.ok(result.items.length >= 2);
+    assert.ok(
+      result.items.every((item) =>
+        noisyDoc.getElementById("featurebullets_feature_div").contains(item)
+      )
+    );
+    assert.ok(result.rows.every((row) => String(row.Text).includes("Bullet")));
+  });
 });
