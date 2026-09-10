@@ -64,12 +64,13 @@ describe("columns", () => {
     assert.deepEqual(collided.columnOrder, ["Title", "Price", "Title 2"]);
   });
 
-  it("drop hides a column without deleting relativeSelector", () => {
+  it("drop deletes the field and removes it from columnOrder and hiddenColumns", () => {
     const src = model();
     const dropped = ClickScrape.columns.dropColumn(src, "Price");
+    assert.equal(dropped.fields.length, 2);
+    assert.equal(dropped.fields.find((f) => f.name === "Price"), undefined);
     assert.deepEqual(dropped.columnOrder, ["Title", "Meta"]);
-    assert.deepEqual(dropped.hiddenColumns, ["Price"]);
-    assert.equal(src.fields.find((f) => f.name === "Price").relativeSelector, ":scope .price");
+    assert.deepEqual(dropped.hiddenColumns, []);
     assert.deepEqual(
       ClickScrape.columns.visibleColumns(dropped.columnOrder, dropped.hiddenColumns),
       ["Title", "Meta"]
