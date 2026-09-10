@@ -55,12 +55,14 @@
   }
 
   function dropColumn(model, name) {
+    const fields = Array.isArray(model?.fields) ? model.fields.slice() : [];
     const columnOrder = Array.isArray(model?.columnOrder) ? model.columnOrder.slice() : [];
     const hiddenColumns = Array.isArray(model?.hiddenColumns) ? model.hiddenColumns.slice() : [];
-    if (!name) return { columnOrder, hiddenColumns };
+    if (!name) return { fields, columnOrder, hiddenColumns };
+    const nextFields = fields.filter((f) => f.name !== name);
     const nextOrder = columnOrder.filter((n) => n !== name);
-    if (!hiddenColumns.includes(name)) hiddenColumns.push(name);
-    return { columnOrder: nextOrder, hiddenColumns };
+    const nextHidden = hiddenColumns.filter((n) => n !== name);
+    return { fields: nextFields, columnOrder: nextOrder, hiddenColumns: nextHidden };
   }
 
   function moveColumn(columnOrder, name, dir) {

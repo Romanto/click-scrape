@@ -48,6 +48,21 @@
     retrievedItemNodes = [];
   }
 
+  function clearFieldOutlines(relativeSelector) {
+    if (!relativeSelector || !state.rootSelector) return;
+    try {
+      const root = document.querySelector(state.rootSelector);
+      if (!root) return;
+      const items = NS.selectors.queryItems?.(root, state.itemSelector) || [];
+      for (const item of items) {
+        const fieldEl = NS.extract.queryField?.(item, relativeSelector);
+        if (fieldEl) fieldEl.classList.remove("click-scrape-selected");
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   function highlightRetrievedItems(items) {
     clearRetrievedItems();
     for (const el of items || []) {
@@ -177,9 +192,12 @@
 
   function onDrop(name) {
     if (state.walking) return;
+    const field = state.fields.find((f) => f.name === name);
     const updated = NS.columns.dropColumn(state, name);
+    state.fields = updated.fields;
     state.columnOrder = updated.columnOrder;
     state.hiddenColumns = updated.hiddenColumns;
+    if (field) clearFieldOutlines(field.relativeSelector);
     applyColumnView();
   }
 
@@ -314,6 +332,7 @@
         if (!still) {
           state.columnOrder = state.columnOrder.filter((n) => n !== name);
           state.hiddenColumns = state.hiddenColumns.filter((n) => n !== name);
+          clearFieldOutlines(removed.relativeSelector);
         }
       }
       refreshUi();
