@@ -187,4 +187,41 @@ describe("selectors", () => {
     assert.ok(ctx.items.every((item) => item.tagName === "LI"));
     assert.ok(ctx.items.some((item) => item.textContent.includes("play music")));
   });
+
+  it("findSimilarPeers outlines sibling size swatches", () => {
+    const html = loadFixture("size-swatches.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const small = [...document.querySelectorAll(".swatch-title-text-display")].find(
+      (el) => el.textContent.trim() === "Small"
+    );
+    const peers = CS.selectors.findSimilarPeers(small);
+    const texts = peers.map((p) => p.textContent.replace(/\s+/g, " ").trim());
+    assert.ok(peers.length >= 4, "other sizes highlighted as similar");
+    assert.ok(texts.some((t) => t.includes("Medium")));
+    assert.ok(texts.some((t) => t.includes("Large")));
+    assert.ok(!texts.some((t) => t.trim() === "Small"), "hovered size is not in similar peers");
+  });
+
+  it("picking a size field rematches every swatch, not the unique announce id", () => {
+    const html = loadFixture("size-swatches.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const small = document.getElementById("size_name_0-announce");
+    const ctx = CS.selectors.findListContext(small);
+    assert.equal(ctx.items.length, 5, "size swatches are one list");
+    const rel = CS.selectors.relativeSelector(ctx.items[0], small);
+    assertItemRelative(rel);
+    assert.ok(!/#size_name_\d/.test(rel), `field selector must rematch siblings, got ${rel}`);
+
+    const labels = ctx.items.map((item) => {
+      const el = resolveRelative(item, rel);
+      return el ? el.textContent.replace(/\s+/g, " ").trim() : "";
+    });
+    const expected = ["Small", "Medium", "Large", "X-Large", "XX-Large"];
+    assert.equal(labels.length, expected.length);
+    for (let i = 0; i < expected.length; i += 1) {
+      assert.equal(labels[i], expected[i], `row ${i} should be ${expected[i]}`);
+    }
+  });
 });

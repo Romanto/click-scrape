@@ -175,4 +175,21 @@ describe("outline cleanup", () => {
     assert.ok(preview.includes("Bullet one"), "About this item rows kept");
     assert.ok(!preview.includes("Alexa, play music"), "Ask Alexa rows NOT merged (gated)");
   });
+
+  it("picking one size swatch retrieves Small through XX-Large", () => {
+    const html = loadFixture("size-swatches.html");
+    const { document, startPicker, pick } = loadPicker(html);
+
+    startPicker();
+    const small = [...document.querySelectorAll(".swatch-title-text-display")].find(
+      (el) => el.textContent.trim() === "Small"
+    );
+    pick(small);
+
+    const preview = document.getElementById("cs-preview").textContent;
+    for (const label of ["Small", "Medium", "Large", "X-Large", "XX-Large"]) {
+      assert.ok(preview.includes(label), `${label} row retrieved after picking Small`);
+    }
+    assert.ok(document.querySelectorAll(".click-scrape-item").length >= 5, "every size row outlined");
+  });
 });

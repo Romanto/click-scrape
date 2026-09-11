@@ -41,11 +41,11 @@
   }
 
   /** Tag + classes; nth-of-type only when that is not unique among siblings. */
-  function partFor(el, { allowNth = true } = {}) {
+  function partFor(el, { allowNth = true, allowId = true } = {}) {
     const tag = el.tagName.toLowerCase();
     const classes = stableClasses(el).slice(0, 2);
     let part = tag + classSuffix(classes);
-    if (el.id) return `${tag}#${CSS.escape(el.id)}`;
+    if (allowId && el.id) return `${tag}#${CSS.escape(el.id)}`;
     if (allowNth && matchesAmongSiblings(el, part).length > 1) {
       part += `:nth-of-type(${siblingIndexOfType(el)})`;
     }
@@ -464,14 +464,8 @@
   }
 
   function uniqueDescendantSelector(root, el) {
-    if (el.id) {
-      const sel = `#${CSS.escape(el.id)}`;
-      try {
-        if (root.querySelector(sel) === el) return sel;
-      } catch {
-        /* ignore */
-      }
-    }
+    // Indexed widget ids (Amazon size_name_0-announce) are unique per row and
+    // will not rematch sibling items. Prefer class/tag paths instead.
     const tag = el.tagName.toLowerCase();
     const classes = stableClasses(el);
     if (classes.length) {
@@ -506,7 +500,7 @@
     const chain = [];
     let node = to;
     while (node && node !== from) {
-      chain.unshift(partFor(node, { allowNth: true }));
+      chain.unshift(partFor(node, { allowNth: true, allowId: false }));
       const candidate = chain.join(" > ");
       try {
         const hits = from.querySelectorAll(candidate);

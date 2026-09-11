@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Size swatches</title>
+    <style>
+      body { font: 16px/1.4 system-ui, sans-serif; margin: 1.5rem; background: #fff; color: #111; }
+      .dimension-values-list { display: flex; gap: 8px; list-style: none; padding: 0; }
+      .text-swatch-button { display: inline-block; border: 1px solid #ccc; padding: 6px 12px; border-radius: 6px; }
+      .a-button-selected { border-color: #111; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <main id="dp">
+      <div id="centerCol">
+        <div id="title_feature_div" class="celwidget"><span>Gildan T-Shirt</span></div>
+        <div id="inline-twister-row-size_name" class="celwidget inline-twister-row">
+          <div class="dimension-heading">
+            <span class="a-size-base a-color-secondary">Size:</span>
+            <span id="inline-twister-expanded-dimension-text-size_name" class="a-size-base inline-twister-dim-title-value a-text-bold">Medium</span>
+          </div>
+          <div id="inline-twister-expander-content-size_name">
+            <ul class="a-unordered-list a-button-list dimension-values-list" role="radiogroup">
+              <li class="swatch-list-item-text inline-twister-swatch">
+                <span class="a-list-item">
+                  <span id="size_name_0" class="a-button a-button-toggle text-swatch-button">
+                    <span class="a-button-inner">
+                      <input name="0" role="radio" class="a-button-input" type="submit" />
+                      <span id="size_name_0-announce" class="a-button-text">
+                        <span class="a-size-base swatch-title-text-display">Small</span>
+                      </span>
+                    </span>
+                  </span>
+                </span>
+              </li>
+              <li class="swatch-list-item-text inline-twister-swatch">
+                <span class="a-list-item">
+                  <span id="size_name_1" class="a-button a-button-selected a-button-toggle text-swatch-button">
+                    <span class="a-button-inner">
+                      <input name="1" role="radio" class="a-button-input" type="submit" />
+                      <span id="size_name_1-announce" class="a-button-text">
+                        <span class="a-size-base swatch-title-text-display">Medium</span>
+                      </span>
+                    </span>
+                  </span>
+                </span>
+              </li>
+              <li class="swatch-list-item-text inline-twister-swatch">
+                <span class="a-list-item">
+                  <span id="size_name_2" class="a-button a-button-toggle text-swatch-button">
+                    <span class="a-button-inner">
+                      <input name="2" role="radio" class="a-button-input" type="submit" />
+                      <span id="size_name_2-announce" class="a-button-text">
+                        <span class="a-size-base swatch-title-text-display">Large</span>
+                      </span>
+                    </span>
+                  </span>
+                </span>
+              </li>
+              <li class="swatch-list-item-text inline-twister-swatch">
+                <span class="a-list-item">
+                  <span id="size_name_3" class="a-button a-button-toggle text-swatch-button">
+                    <span class="a-button-inner">
+                      <input name="3" role="radio" class="a-button-input" type="submit" />
+                      <span id="size_name_3-announce" class="a-button-text">
+                        <span class="a-size-base swatch-title-text-display">X-Large</span>
+                      </span>
+                    </span>
+                  </span>
+                </span>
+              </li>
+              <li class="swatch-list-item-text inline-twister-swatch">
+                <span class="a-list-item">
+                  <span id="size_name_4" class="a-button a-button-toggle text-swatch-button">
+                    <span class="a-button-inner">
+                      <input name="4" role="radio" class="a-button-input" type="submit" />
+                      <span id="size_name_4-announce" class="a-button-text">
+                        <span class="a-size-base swatch-title-text-display">XX-Large</span>
+                      </span>
+                    </span>
+                  </span>
+                </span>
+              </li>
+            </ul>
+          </div>
+        </div>
+        <div id="unrelated" class="celwidget"><span class="a-size-base">Noise</span></div>
+      </div>
+    </main>
+  </body>
+</html>
