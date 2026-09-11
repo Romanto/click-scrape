@@ -34,6 +34,15 @@
     return !!(el && (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")));
   }
 
+  /** Overlay drop/rename replaces innerHTML during the click, detaching e.target. */
+  function isOverlayEvent(e) {
+    if (isOverlay(e?.target)) return true;
+    const path = typeof e?.composedPath === "function" ? e.composedPath() : [];
+    if (path.some((n) => n && n.id === "click-scrape-overlay")) return true;
+    const target = e?.target;
+    return target instanceof Element && !target.isConnected;
+  }
+
   function clearSimilarHints() {
     similarHintNodes.forEach((node) => {
       node?.classList?.remove("click-scrape-similar");
@@ -89,7 +98,7 @@
   }
 
   function onMouseMove(e) {
-    if (!state.active || isOverlay(e.target)) return;
+    if (!state.active || isOverlayEvent(e)) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || el === state.hoverEl || isOverlay(el)) return;
     clearHover();
@@ -100,12 +109,12 @@
   }
 
   function onClick(e) {
-    if (!state.active || isOverlay(e.target)) return;
+    if (!state.active || isOverlayEvent(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (state.walking) return;
     const el = state.hoverEl || e.target;
-    if (!(el instanceof Element) || isOverlay(el)) return;
+    if (!(el instanceof Element) || isOverlay(el) || !el.isConnected) return;
 
     const nameInput = document.getElementById("cs-field-name");
     const name = (nameInput?.value || "").trim() || `Field ${state.fields.length + 1}`;
@@ -198,6 +207,12 @@
     state.columnOrder = updated.columnOrder;
     state.hiddenColumns = updated.hiddenColumns;
     if (field) clearFieldOutlines(field.relativeSelector);
+    if (!state.fields.length) {
+      document.querySelectorAll(".click-scrape-selected").forEach((el) => el.classList.remove("click-scrape-selected"));
+      clearHover();
+      refreshUi();
+      return;
+    }
     applyColumnView();
   }
 

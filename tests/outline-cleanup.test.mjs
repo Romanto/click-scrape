@@ -1,85 +1,64 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createDocument, loadClickScrape, loadFixture } from "./helpers/load-click-scrape.mjs";
+import { loadFixture, loadPicker } from "./helpers/load-click-scrape.mjs";
 
 describe("outline cleanup", () => {
-  it("undo clears .click-scrape-selected when the field is removed", () => {
+  it("dropping a column from the preview table clears the green selected outline", () => {
     const html = loadFixture("nested-cards.html");
-    const { window, document } = createDocument(html);
-    const ClickScrape = loadClickScrape(window);
+    const { document, startPicker, pick, fire } = loadPicker(html);
 
+    startPicker();
     const titleEl = document.querySelector("article.product .title");
     assert.ok(titleEl, "fixture has title element");
-    titleEl.classList.add("click-scrape-selected");
+    pick(titleEl);
 
-    const field = { name: "Title", relativeSelector: ":scope .title" };
-    const state = {
-      fields: [field],
-      rootSelector: ".products",
-      itemSelector: "article.product",
-      columnOrder: ["Title"],
-      hiddenColumns: [],
-    };
+    assert.ok(titleEl.classList.contains("click-scrape-selected"), "outline present after pick");
+    assert.ok(document.querySelector("#cs-preview [data-cs-drop]"), "preview table has a drop control");
+    assert.ok(document.querySelectorAll(".click-scrape-item").length > 0, "retrieved items highlighted");
 
-    const root = document.querySelector(state.rootSelector);
-    const items = ClickScrape.selectors.queryItems(root, state.itemSelector);
-    assert.ok(items.length > 0, "fixture has items");
+    fire(document.querySelector("#cs-preview [data-cs-drop]"), "click");
 
-    assert.ok(titleEl.classList.contains("click-scrape-selected"), "outline present before undo");
-
-    state.fields.pop();
-    for (const item of items) {
-      const fieldEl = ClickScrape.extract.queryField(item, field.relativeSelector);
-      if (fieldEl) fieldEl.classList.remove("click-scrape-selected");
-    }
-
-    assert.ok(!titleEl.classList.contains("click-scrape-selected"), "outline cleared after undo");
+    assert.equal(document.querySelectorAll("#cs-preview [data-cs-drop]").length, 0, "column removed from table");
+    assert.ok(
+      !titleEl.classList.contains("click-scrape-selected"),
+      "green selected outline cleared after drop"
+    );
+    assert.equal(
+      document.querySelectorAll(".click-scrape-selected").length,
+      0,
+      "no leftover selected outlines"
+    );
+    assert.equal(
+      document.querySelectorAll(".click-scrape-item").length,
+      0,
+      "item outlines cleared when no columns remain"
+    );
   });
 
-  it("drop deletes field from recipe and can clear outline", () => {
-    const { window } = createDocument("<!DOCTYPE html><html><body></body></html>");
-    const ClickScrape = loadClickScrape(window);
-
-    const model = {
-      fields: [
-        { name: "Title", relativeSelector: ":scope .title" },
-        { name: "Price", relativeSelector: ":scope .price" },
-      ],
-      columnOrder: ["Title", "Price"],
-      hiddenColumns: [],
-    };
-
-    const dropped = ClickScrape.columns.dropColumn(model, "Price");
-    assert.equal(dropped.fields.length, 1);
-    assert.equal(dropped.fields[0].name, "Title");
-    assert.equal(dropped.fields.find((f) => f.name === "Price"), undefined);
-    assert.deepEqual(dropped.columnOrder, ["Title"]);
-    assert.deepEqual(dropped.hiddenColumns, []);
-  });
-
-  it("clearFieldOutlines contract: fields removed via undo no longer have selection class", () => {
+  it("dropping one of several columns only clears that field's selected outline", () => {
     const html = loadFixture("nested-cards.html");
-    const { window, document } = createDocument(html);
-    const ClickScrape = loadClickScrape(window);
+    const { document, startPicker, pick, fire } = loadPicker(html);
 
-    const root = document.querySelector(".products");
-    const items = ClickScrape.selectors.queryItems(root, "article.product");
-    assert.ok(items.length >= 2, "fixture has multiple items");
+    startPicker();
+    const titleEl = document.querySelector("article.product .title");
+    const priceEl = document.querySelector("article.product .price");
+    const nameInput = document.getElementById("cs-field-name");
+    nameInput.value = "Title";
+    pick(titleEl);
+    nameInput.value = "Price";
+    pick(priceEl);
 
-    const field = { name: "Title", relativeSelector: ":scope .title" };
-    for (const item of items) {
-      const fieldEl = ClickScrape.extract.queryField(item, field.relativeSelector);
-      if (fieldEl) fieldEl.classList.add("click-scrape-selected");
-    }
+    assert.ok(titleEl.classList.contains("click-scrape-selected"));
+    assert.ok(priceEl.classList.contains("click-scrape-selected"));
 
-    const firstTitle = ClickScrape.extract.queryField(items[0], field.relativeSelector);
-    assert.ok(firstTitle.classList.contains("click-scrape-selected"), "outline applied");
+    const titleDrop = document.querySelector('#cs-preview [data-cs-drop="Title"]');
+    assert.ok(titleDrop, "Title drop control exists");
+    fire(titleDrop, "click");
 
-    for (const item of items) {
-      const fieldEl = ClickScrape.extract.queryField(item, field.relativeSelector);
-      if (fieldEl) fieldEl.classList.remove("click-scrape-selected");
-    }
-
-    assert.ok(!firstTitle.classList.contains("click-scrape-selected"), "outline cleared");
+    assert.ok(!titleEl.classList.contains("click-scrape-selected"), "dropped Title outline cleared");
+    assert.ok(priceEl.classList.contains("click-scrape-selected"), "remaining Price outline kept");
+    assert.ok(document.querySelector('#cs-preview [data-cs-col="Price"]'), "Price column still in table");
+    assert.equal(document.querySelectorAll('#cs-preview [data-cs-col="Title"]').length, 0, "Title column gone");
+    assert.ok(document.querySelectorAll(".click-scrape-item").length > 0, "list items stay highlighted");
   });
 });
