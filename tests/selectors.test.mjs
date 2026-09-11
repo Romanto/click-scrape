@@ -91,7 +91,10 @@ describe("selectors", () => {
     assert.ok(span);
 
     const scope = CS.selectors.getSimilarScopeRoot(span);
-    assert.equal(scope?.id, "featurebullets_feature_div");
+    assert.ok(
+      scope?.id === "feature-bullets" || scope?.id === "featurebullets_feature_div",
+      "scope must be the feature-bullets container, not #centerCol"
+    );
 
     const peers = CS.selectors.findSimilarPeers(span);
     assert.equal(peers.length, 2, "only other bullets in the feature list, not page-wide noise");
@@ -127,9 +130,61 @@ describe("selectors", () => {
     const ctx = CS.selectors.findListContext(span);
 
     assert.ok(ctx.items.length >= 2);
+    assert.equal(ctx.items.length, 3, "must pick the three bullets, not sibling .celwidget widgets");
     assert.ok(
       ctx.items.every((item) => document.getElementById("featurebullets_feature_div").contains(item)),
       "list items must not include unrelated page-wide .a-list-item nodes"
     );
+    assert.ok(
+      ctx.items.every((item) => item.tagName === "LI" || item.classList.contains("a-list-item")),
+      "items must be the bullet rows, not #centerCol .celwidget blocks"
+    );
+  });
+
+  it("findListContext maps About this item heading to the adjacent bullet list", () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const heading = [...document.querySelectorAll("h1")].find(
+      (h) => h.textContent.trim() === "About this item"
+    );
+    assert.ok(heading);
+
+    const ctx = CS.selectors.findListContext(heading);
+    assert.equal(ctx.items.length, 3);
+    assert.ok(
+      ctx.items.every((item) => document.getElementById("feature-bullets").contains(item)),
+      "heading click must not select page-wide .celwidget siblings"
+    );
+    assert.ok(ctx.items.every((item) => item.tagName === "LI"));
+  });
+
+  it("findSimilarPeers on About this item heading outlines the adjacent bullets", () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const heading = [...document.querySelectorAll("h1")].find(
+      (h) => h.textContent.trim() === "About this item"
+    );
+    const peers = CS.selectors.findSimilarPeers(heading);
+    assert.equal(peers.length, 3);
+    assert.ok(peers.every((p) => p.tagName === "LI"));
+  });
+
+  it("findListContext maps Ask Alexa heading to its own list, not .celwidget siblings", () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const heading = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "Ask Alexa");
+    assert.ok(heading);
+
+    const scope = CS.selectors.getSimilarScopeRoot(heading);
+    assert.equal(scope?.id, "ppi-justAskAlexa_feature_div");
+
+    const ctx = CS.selectors.findListContext(heading);
+    assert.equal(ctx.items.length, 2);
+    assert.ok(ctx.items.every((item) => document.getElementById("ppi-justAskAlexa_feature_div").contains(item)));
+    assert.ok(ctx.items.every((item) => item.tagName === "LI"));
+    assert.ok(ctx.items.some((item) => item.textContent.includes("play music")));
   });
 });

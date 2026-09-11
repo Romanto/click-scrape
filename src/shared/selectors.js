@@ -151,9 +151,30 @@
     // Scoping to these containers prevents highlighting unrelated .a-list-item spans elsewhere on the page.
     const byId = element.closest(
       '#featurebullets_feature_div, #feature-bullets-bullet-list, ' +
-        '[id*="featurebullets_feature"], [id*="feature-bullets"], [id*="detailBullets_feature"]'
+        '[id*="featurebullets_feature"], [id*="feature-bullets"], [id*="detailBullets_feature"], ' +
+        '[id*="justAskAlexa"], [id*="AskAlexa"], [id*="alexaInteraction"]'
     );
     if (byId) return byId;
+
+    // Heading beside a list (Amazon "Ask Alexa"): scope to that widget, not #centerCol.
+    const heading = element.closest?.("h1, h2, h3, h4, h5, h6");
+    const fromHeading = heading && (heading === element || heading.contains(element)) ? heading : null;
+    if (fromHeading) {
+      let host = fromHeading.parentElement;
+      for (let d = 0; d < 6 && host; d += 1) {
+        let listed = 0;
+        for (let c = host.firstElementChild; c; c = c.nextElementSibling) {
+          if (c.tagName !== "UL" && c.tagName !== "OL") continue;
+          let lis = 0;
+          for (let li = c.firstElementChild; li; li = li.nextElementSibling) {
+            if (li.tagName === "LI") lis += 1;
+          }
+          if (lis >= 2) listed += 1;
+        }
+        if (listed >= 1) return host;
+        host = host.parentElement;
+      }
+    }
 
     let el = element;
     for (let d = 0; d < 10 && el; d += 1) {
@@ -287,15 +308,44 @@
 
   function candidateFromPeers(fieldEl, peers) {
     if (!peers || peers.length < 2) return null;
-    const item = peers.find((p) => p === fieldEl || p.contains(fieldEl));
-    if (!item) return null;
-    const root = peersShareParent(peers) || item.parentElement;
+    const item = peers.find((p) => p === fieldEl || p.contains(fieldEl)) || peers[0];
+    const sharedParent = peersShareParent(peers);
+    const root = sharedParent || item.parentElement;
     if (!root) return null;
-    const items = peersShareParent(peers)
+    const items = sharedParent
       ? peers
       : [...root.children].filter((c) => peers.includes(c) || similarity(c, item) >= SIMILARITY_MIN);
     if (items.length < 2) return null;
     return { item, root, items };
+  }
+
+  /**
+   * Heading / chrome beside a list (Amazon "About this item") still maps to that ul/ol.
+   */
+  function computeAdjacentListGroupElements(element) {
+    const nested = computeSiblingListGroupElements(element);
+    if (nested.length >= 2) return nested;
+    if (!element?.closest) return [];
+    const scopeRoot = getSimilarScopeRoot(element);
+    if (!scopeRoot || !scopeRoot.contains(element)) return [];
+    const heading = element.closest("h1, h2, h3, h4, h5, h6");
+    if (!heading || !scopeRoot.contains(heading)) return [];
+    let n = heading.nextElementSibling;
+    while (n && (n === scopeRoot || scopeRoot.contains(n))) {
+      const lists = [];
+      if (n.tagName === "UL" || n.tagName === "OL") lists.push(n);
+      else if (n.querySelector) lists.push(...n.querySelectorAll("ul, ol"));
+      for (const list of lists) {
+        if (list !== scopeRoot && !scopeRoot.contains(list)) continue;
+        const items = [];
+        for (let c = list.firstElementChild; c; c = c.nextElementSibling) {
+          if (c.tagName === "LI") items.push(c);
+        }
+        if (items.length >= 2) return items;
+      }
+      n = n.nextElementSibling;
+    }
+    return [];
   }
 
   /**
@@ -304,28 +354,35 @@
    */
   function findSimilarPeers(element) {
     if (!(element instanceof Element)) return [];
-    const picked = pickPeerSelector(element);
-    if (picked) {
-      const scopeRoot = getSimilarScopeRoot(element);
-      const all = filterNodesToScope(querySelectorAllSafe(scopeRoot, picked.selector), scopeRoot);
-      const root = innermostMatchRoot(all, element);
-      if (root && all.length >= 2) {
-        return all.filter((el) => el !== element && el !== root && el.nodeType === Node.ELEMENT_NODE);
+    const heading = element.closest?.("h1, h2, h3, h4, h5, h6");
+    const onListHeading = !!(heading && (heading === element || heading.contains(element)));
+    if (!onListHeading) {
+      const picked = pickPeerSelector(element);
+      if (picked) {
+        const scopeRoot = getSimilarScopeRoot(element);
+        const all = filterNodesToScope(querySelectorAllSafe(scopeRoot, picked.selector), scopeRoot);
+        const root = innermostMatchRoot(all, element);
+        if (root && all.length >= 2) {
+          return all.filter((el) => el !== element && el !== root && el.nodeType === Node.ELEMENT_NODE);
+        }
       }
     }
-    const sib = computeSiblingListGroupElements(element);
+    const sib = computeAdjacentListGroupElements(element);
     if (sib.length < 2) return [];
     const row = sib.find((item) => item === element || item.contains(element));
-    if (!row) return [];
+    if (!row) return sib.filter((item) => item !== element);
     return sib.filter((item) => item !== row);
   }
 
   function collectCandidates(fieldEl) {
     const candidates = [];
+    const scopeRoot = getSimilarScopeRoot(fieldEl);
     let node = fieldEl;
     for (let depth = 0; depth < MAX_WALK && node && node !== document.body; depth += 1) {
       const parent = node.parentElement;
       if (!parent || parent === document.documentElement) break;
+      // Stay inside the similar-peer scope so page-wide widgets (Amazon .celwidget) cannot win.
+      if (scopeRoot && parent !== scopeRoot && !scopeRoot.contains(parent)) break;
       const sameTag = [...parent.children].filter((c) => c.tagName === node.tagName);
       if (sameTag.length >= 2) {
         const similar = sameTag.filter((s) => similarity(s, node) >= SIMILARITY_MIN);
@@ -352,7 +409,7 @@
       el = el.parentElement;
     }
 
-    const siblingLis = computeSiblingListGroupElements(fieldEl);
+    const siblingLis = computeAdjacentListGroupElements(fieldEl);
     const fromLis = candidateFromPeers(fieldEl, siblingLis);
     if (fromLis) candidates.push(fromLis);
 
