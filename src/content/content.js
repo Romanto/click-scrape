@@ -19,6 +19,7 @@
     walking: false,
     columnOrder: [],
     hiddenColumns: [],
+    liveItems: [],
   };
 
   let walkController = null;
@@ -27,11 +28,22 @@
   let similarHintNodes = [];
   /** @type {Element[]} */
   let retrievedItemNodes = [];
+  /** @type {Map<string, Set<Element>>} */
+  let selectedByField = new Map();
   // TODO: Consider throttling onMouseMove with requestAnimationFrame for performance on complex pages.
   // Current direct handler works well for typical list pages but may lag on heavy DOM trees.
 
   function isOverlay(el) {
     return !!(el && (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")));
+  }
+
+  /** Overlay drop/rename replaces innerHTML during the click, detaching e.target. */
+  function isOverlayEvent(e) {
+    if (isOverlay(e?.target)) return true;
+    const path = typeof e?.composedPath === "function" ? e.composedPath() : [];
+    if (path.some((n) => n && n.id === "click-scrape-overlay")) return true;
+    const target = e?.target;
+    return target instanceof Element && !target.isConnected;
   }
 
   function clearSimilarHints() {
@@ -48,18 +60,41 @@
     retrievedItemNodes = [];
   }
 
-  function clearFieldOutlines(relativeSelector) {
-    if (!relativeSelector || !state.rootSelector) return;
+  function outlineItems() {
+    const live = (state.liveItems || []).filter((n) => n?.isConnected);
+    if (live.length) return live;
+    if (!state.rootSelector) return [];
     try {
       const root = document.querySelector(state.rootSelector);
-      if (!root) return;
-      const items = NS.selectors.queryItems?.(root, state.itemSelector) || [];
-      for (const item of items) {
-        const fieldEl = NS.extract.queryField?.(item, relativeSelector);
-        if (fieldEl) fieldEl.classList.remove("click-scrape-selected");
-      }
+      if (!root) return [];
+      return NS.selectors.queryItems?.(root, state.itemSelector) || [];
     } catch {
-      /* ignore */
+      return [];
+    }
+  }
+
+  function markFieldSelected(name, el) {
+    if (!(el instanceof Element) || !name) return;
+    el.classList.add("click-scrape-selected");
+    if (!selectedByField.has(name)) selectedByField.set(name, new Set());
+    selectedByField.get(name).add(el);
+  }
+
+  function clearFieldOutlines(name, relativeSelector) {
+    const tracked = name ? selectedByField.get(name) : null;
+    if (tracked) {
+      tracked.forEach((node) => node?.classList?.remove("click-scrape-selected"));
+      selectedByField.delete(name);
+    }
+    if (!relativeSelector) return;
+    for (const item of outlineItems()) {
+      let fieldEl = null;
+      try {
+        fieldEl = NS.extract.queryField?.(item, relativeSelector);
+      } catch {
+        fieldEl = null;
+      }
+      if (fieldEl) fieldEl.classList.remove("click-scrape-selected");
     }
   }
 
@@ -89,7 +124,7 @@
   }
 
   function onMouseMove(e) {
-    if (!state.active || isOverlay(e.target)) return;
+    if (!state.active || isOverlayEvent(e)) return;
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || el === state.hoverEl || isOverlay(el)) return;
     clearHover();
@@ -99,13 +134,55 @@
     applySimilarHints(peers);
   }
 
+  /** Clicking an already-selected field removes that column instead of adding another. */
+  function findFieldForClick(el, item) {
+    if (!(el instanceof Element) || !state.fields.length) return null;
+    const marked = el.classList.contains("click-scrape-selected");
+    if (!marked) return null;
+    for (const field of state.fields) {
+      let fieldEl = null;
+      try {
+        fieldEl = NS.extract.queryField?.(item, field.relativeSelector);
+      } catch {
+        fieldEl = null;
+      }
+      if (fieldEl === el || fieldEl?.contains?.(el) || (fieldEl && el.contains?.(fieldEl))) return field;
+    }
+    return null;
+  }
+
+  function itemContaining(items, el) {
+    return (items || []).find((i) => i === el || i.contains?.(el)) || null;
+  }
+
+  function disjointItems(a, b) {
+    if (!a?.length || !b?.length) return true;
+    const seen = new Set(a);
+    return !b.some((n) => seen.has(n));
+  }
+
+  function resetListSession() {
+    state.rootSelector = "";
+    state.itemSelector = "*";
+    state.sampleItem = null;
+    state.liveItems = [];
+    selectedByField.clear();
+  }
+
+  function clearSelectedMarks() {
+    selectedByField.clear();
+    document.querySelectorAll(".click-scrape-selected").forEach((node) => {
+      node.classList.remove("click-scrape-selected");
+    });
+  }
+
   function onClick(e) {
-    if (!state.active || isOverlay(e.target)) return;
+    if (!state.active || isOverlayEvent(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (state.walking) return;
     const el = state.hoverEl || e.target;
-    if (!(el instanceof Element) || isOverlay(el)) return;
+    if (!(el instanceof Element) || isOverlay(el) || !el.isConnected) return;
 
     const nameInput = document.getElementById("cs-field-name");
     const name = (nameInput?.value || "").trim() || `Field ${state.fields.length + 1}`;
@@ -114,10 +191,35 @@
     if (!state.rootSelector) {
       state.rootSelector = ctx.rootSelector;
       state.itemSelector = ctx.itemSelector;
+      state.liveItems = (ctx.items || []).filter((n) => n?.nodeType === 1);
     }
 
-    const item = ctx.items.find((i) => i === el || i.contains(el)) || el;
+    let item = itemContaining(state.liveItems, el);
+    // Multi-list merge skew fix: don't merge disjoint lists into the same recipe.
+    // When clicking a disjoint list, treat it as a field pick within the current list if possible,
+    // but don't merge new list items into liveItems (which would create preview/save skew).
+    if (!item && ctx.items?.length >= 2 && disjointItems(state.liveItems, ctx.items)) {
+      // Disjoint list detected. Don't merge items.
+      // Attempt to find or use the clicked element's own list context.
+      item = ctx.items.find((i) => i === el || i.contains?.(el)) || null;
+      if (!item && state.fields.length) {
+        // Can't place this click in either list; mark it on the last field.
+        const attach = state.fields[state.fields.length - 1]?.name;
+        if (attach) markFieldSelected(attach, el);
+        else el.classList.add("click-scrape-selected");
+        refreshUi();
+        return;
+      }
+    }
+
+    item = item || ctx.items.find((i) => i === el || i.contains(el)) || el;
     if (!state.sampleItem) state.sampleItem = item;
+
+    const existing = findFieldForClick(el, item);
+    if (existing) {
+      onDrop(existing.name);
+      return;
+    }
 
     const rel = NS.selectors.relativeSelector(item, el);
     const picked = NS.columns.applyPick(name, {
@@ -129,7 +231,11 @@
     state.fields = picked.fields;
     state.columnOrder = picked.columnOrder;
     state.hiddenColumns = picked.hiddenColumns;
-    el.classList.add("click-scrape-selected");
+    const fieldName =
+      picked.fields.find((f) => f.relativeSelector === rel)?.name ||
+      picked.fields[picked.fields.length - 1]?.name ||
+      name;
+    markFieldSelected(fieldName, el);
     if (nameInput) nameInput.value = "";
     refreshUi();
   }
@@ -187,6 +293,10 @@
     state.rows = updated.rows;
     state.columnOrder = updated.columnOrder;
     state.hiddenColumns = updated.hiddenColumns;
+    if (oldName !== nextName && selectedByField.has(oldName)) {
+      selectedByField.set(nextName, selectedByField.get(oldName));
+      selectedByField.delete(oldName);
+    }
     applyColumnView();
   }
 
@@ -197,7 +307,14 @@
     state.fields = updated.fields;
     state.columnOrder = updated.columnOrder;
     state.hiddenColumns = updated.hiddenColumns;
-    if (field) clearFieldOutlines(field.relativeSelector);
+    if (field) clearFieldOutlines(field.name, field.relativeSelector);
+    if (!state.fields.length) {
+      clearSelectedMarks();
+      clearHover();
+      resetListSession();
+      refreshUi();
+      return;
+    }
     applyColumnView();
   }
 
@@ -233,6 +350,13 @@
       return;
     }
     state.walked = false;
+    const live = (state.liveItems || []).filter((n) => n?.isConnected);
+    if (live.length) {
+      state.rows = NS.extract.retrieveRowsFromItems?.(live, state.fields) || [];
+      highlightRetrievedItems(live);
+      applyColumnView();
+      return;
+    }
     const result = NS.extract.retrieve?.(currentRecipe()) || {
       items: NS.extract.retrieveItems?.(currentRecipe()) || [],
       rows: NS.extract.extractRows(currentRecipe()),
@@ -332,8 +456,13 @@
         if (!still) {
           state.columnOrder = state.columnOrder.filter((n) => n !== name);
           state.hiddenColumns = state.hiddenColumns.filter((n) => n !== name);
-          clearFieldOutlines(removed.relativeSelector);
+          clearFieldOutlines(name, removed.relativeSelector);
         }
+      }
+      if (!state.fields.length) {
+        clearSelectedMarks();
+        clearHover();
+        resetListSession();
       }
       refreshUi();
     });
@@ -388,6 +517,8 @@
     state.walked = false;
     state.columnOrder = [];
     state.hiddenColumns = [];
+    state.liveItems = [];
+    selectedByField.clear();
     bindOverlay();
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
@@ -407,6 +538,7 @@
     state.walking = false;
     clearHover();
     clearRetrievedItems();
+    selectedByField.clear();
     document.querySelectorAll(".click-scrape-selected").forEach((el) => el.classList.remove("click-scrape-selected"));
     document.querySelectorAll(".click-scrape-similar").forEach((el) => el.classList.remove("click-scrape-similar"));
     document.querySelectorAll(".click-scrape-item").forEach((el) => el.classList.remove("click-scrape-item"));
