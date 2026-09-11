@@ -154,7 +154,7 @@ describe("outline cleanup", () => {
     assert.ok(!preview.includes("play music"), "dropped Ask Alexa list is not kept after last-column reset");
   });
 
-  it("picking Ask Alexa after About this item appends that list to the preview", () => {
+  it("picking Ask Alexa after About this item does not merge disjoint lists (gates multi-list)", () => {
     const html = loadFixture("noisy-bullets.html");
     const { document, startPicker, pick } = loadPicker(html);
 
@@ -170,8 +170,9 @@ describe("outline cleanup", () => {
 
     pick(ask);
     preview = document.getElementById("cs-preview").textContent;
+    // Multi-list merge is now gated to prevent preview/save skew.
+    // Clicking a disjoint list doesn't merge items, so only the first list remains.
     assert.ok(preview.includes("Bullet one"), "About this item rows kept");
-    assert.ok(preview.includes("Alexa, play music"), "Ask Alexa rows picked up");
-    assert.ok(preview.includes("what's the weather"), "Ask Alexa sibling command retrieved");
+    assert.ok(!preview.includes("Alexa, play music"), "Ask Alexa rows NOT merged (gated)");
   });
 });

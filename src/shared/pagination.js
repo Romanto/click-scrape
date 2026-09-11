@@ -252,10 +252,7 @@
 
     let url = options.currentUrl || "";
     let doc = startDoc;
-    const firstPageRows = Array.isArray(options.initialRows)
-      ? options.initialRows
-      : (extractRows ? extractRows(recipe, doc) : []);
-    let rows = mergeRows([], firstPageRows, columns);
+    let rows = mergeRows([], extractRows ? extractRows(recipe, doc) : [], columns);
     let pages = 1;
     let hint = "Pagination in progress…";
     const visited = new Set();

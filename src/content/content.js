@@ -161,16 +161,6 @@
     return !b.some((n) => seen.has(n));
   }
 
-  function mergeLiveItems(extra) {
-    const seen = new Set(state.liveItems);
-    for (const n of extra || []) {
-      if (n?.nodeType === 1 && !seen.has(n)) {
-        seen.add(n);
-        state.liveItems.push(n);
-      }
-    }
-  }
-
   function resetListSession() {
     state.rootSelector = "";
     state.itemSelector = "*";
@@ -205,10 +195,15 @@
     }
 
     let item = itemContaining(state.liveItems, el);
+    // Multi-list merge skew fix: don't merge disjoint lists into the same recipe.
+    // When clicking a disjoint list, treat it as a field pick within the current list if possible,
+    // but don't merge new list items into liveItems (which would create preview/save skew).
     if (!item && ctx.items?.length >= 2 && disjointItems(state.liveItems, ctx.items)) {
-      mergeLiveItems(ctx.items);
-      item = itemContaining(state.liveItems, el);
+      // Disjoint list detected. Don't merge items.
+      // Attempt to find or use the clicked element's own list context.
+      item = ctx.items.find((i) => i === el || i.contains?.(el)) || null;
       if (!item && state.fields.length) {
+        // Can't place this click in either list; mark it on the last field.
         const attach = state.fields[state.fields.length - 1]?.name;
         if (attach) markFieldSelected(attach, el);
         else el.classList.add("click-scrape-selected");
@@ -402,7 +397,6 @@
         persistPageCount,
         signal: walkController?.signal,
         columns,
-        initialRows: state.rows.length > 0 ? state.rows : undefined,
         onProgress: ({ rows, hint, done }) => {
           if (stale()) return;
           state.rows = rows;
