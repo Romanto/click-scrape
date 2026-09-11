@@ -402,6 +402,7 @@
         persistPageCount,
         signal: walkController?.signal,
         columns,
+        initialRows: state.rows.length > 0 ? state.rows : undefined,
         onProgress: ({ rows, hint, done }) => {
           if (stale()) return;
           state.rows = rows;

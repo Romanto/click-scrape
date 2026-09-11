@@ -310,4 +310,34 @@ describe("pagination", () => {
     assert.equal(result.pages, 1);
     assert.equal(result.rows.length, 5);
   });
+
+  it("walkPages uses initialRows for first page when provided", async () => {
+    const customRows = [
+      { Title: "Custom A", Price: "$100" },
+      { Title: "Custom B", Price: "$200" },
+      { Title: "Custom C", Price: "$300" },
+    ];
+    let fetched = false;
+    const result = await ClickScrape.pagination.walkPages(recipe, page1, {
+      currentUrl: BASE,
+      initialRows: customRows,
+      fetchPage: async (url) => {
+        fetched = true;
+        if (url.includes("page-2")) return page2;
+        return null;
+      },
+    });
+
+    assert.ok(fetched, "walked to page 2");
+    assert.equal(result.pages, 2);
+    assert.ok(result.rows.length > customRows.length, "merged page 2 rows");
+    assert.ok(
+      result.rows.some((r) => r.Title === "Custom A"),
+      "initialRows preserved in walk"
+    );
+    assert.ok(
+      result.rows.some((r) => r.Title === "Ceramic Planter"),
+      "page 2 rows merged"
+    );
+  });
 });

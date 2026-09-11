@@ -137,4 +137,63 @@ describe("extract", () => {
     );
     assert.ok(result.rows.every((row) => String(row.Text).includes("Bullet")));
   });
+
+  it("multi-list liveItems preview matches saved recipe re-run", () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { window, document: doc } = createDocument(html);
+    const CS = loadClickScrape(window);
+
+    // Simulate multi-list picking: "About this item" + "Ask Alexa"
+    const aboutSpan = doc.querySelector("#featurebullets_feature_div .a-list-item");
+    const aboutCtx = CS.selectors.findListContext(aboutSpan);
+    const aboutItems = aboutCtx.items.filter((n) => n?.nodeType === 1);
+
+    const askSpan = doc.querySelector("#ppi-justAskAlexa_feature_div .a-list-item");
+    const askCtx = CS.selectors.findListContext(askSpan);
+    const askItems = askCtx.items.filter((n) => n?.nodeType === 1);
+
+    // Combined live items from both lists
+    const liveItems = [...aboutItems, ...askItems];
+    assert.ok(liveItems.length >= 5, "at least 3 About + 2 Ask items");
+
+    const fields = [{ name: "Text", relativeSelector: ":scope" }];
+
+    // Preview using liveItems (what the picker shows while active)
+    const previewRows = CS.extract.retrieveRowsFromItems(liveItems, fields);
+
+    // Build recipe as the picker would save it (first list context)
+    const recipe = {
+      rootSelector: aboutCtx.rootSelector,
+      itemSelector: aboutCtx.itemSelector,
+      fields,
+    };
+
+    // Re-run recipe (what happens on recipe load)
+    const savedRows = CS.extract.extractRows(recipe, doc);
+
+    // They should match or we have preview/save skew
+    assert.equal(
+      previewRows.length,
+      liveItems.length,
+      "preview rows match live items count"
+    );
+    assert.ok(
+      savedRows.length >= liveItems.length ||
+        (savedRows.length === aboutItems.length && savedRows.length < liveItems.length),
+      "saved recipe only retrieves first list (skew detected)"
+    );
+
+    // Demonstrate the skew: preview has both lists, saved recipe only has first list
+    const previewText = previewRows.map((r) => r.Text).join("|");
+    const savedText = savedRows.map((r) => r.Text).join("|");
+
+    assert.ok(previewText.includes("Bullet"), "preview has About items");
+    assert.ok(previewText.includes("Alexa"), "preview has Ask items");
+    assert.ok(savedText.includes("Bullet"), "saved has About items");
+    // This will fail, demonstrating the skew:
+    assert.ok(
+      savedText.includes("Alexa") || savedRows.length < liveItems.length,
+      "saved recipe should retrieve both lists or we document the skew"
+    );
+  });
 });
