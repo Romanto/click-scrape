@@ -30,6 +30,32 @@
     return `${groupIndex}::${name}`;
   }
 
+  // #region agent log
+  function debugLog(hypothesisId, location, message, data, runId = "post-fix") {
+    const payload = {
+      sessionId: "4676a1",
+      runId,
+      hypothesisId,
+      location,
+      message,
+      data,
+      timestamp: Date.now(),
+    };
+    fetch("http://127.0.0.1:7509/ingest/6d6969b3-13c1-42c8-8eaf-0bdc9884e441", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4676a1" },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+    try {
+      chrome.runtime.sendMessage({ type: "CLICK_SCRAPE_DEBUG_LOG", payload }, () => {
+        void chrome.runtime.lastError;
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+  // #endregion
+
   function isOverlay(el) {
     return !!(el && (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")));
   }
@@ -313,6 +339,22 @@
       picked.fields.find((f) => f.relativeSelector === rel)?.name ||
       picked.fields[picked.fields.length - 1]?.name ||
       name;
+    // #region agent log
+    debugLog("B", "content.js:onClick", "field picked into group", {
+      groupIndex,
+      fieldName,
+      rel,
+      groupFieldCount: group.fields.length,
+      groupFieldNames: group.fields.map((f) => f.name),
+      totalGroups: state.groups.length,
+      allGroups: state.groups.map((g, i) => ({
+        i,
+        fields: g.fields.map((f) => f.name),
+        itemSelector: g.itemSelector,
+        liveCount: (g.liveItems || []).length,
+      })),
+    });
+    // #endregion
     markFieldSelected(groupIndex, fieldName, el);
     if (nameInput) nameInput.value = "";
     refreshUi();
@@ -622,19 +664,45 @@
       }
     });
     overlay.querySelector("#cs-save")?.addEventListener("click", async () => {
-      const group = primaryGroup();
-      if (!group?.fields.length || !group.rootSelector) return;
+      const groups = state.groups.filter((g) => g.fields?.length && g.rootSelector);
+      if (!groups.length) return;
+      const primary = groups[0];
       const recipe = {
         id: crypto.randomUUID(),
         name: `Recipe ${new Date().toLocaleString()}`,
         createdAt: Date.now(),
         pageUrl: location.href,
-        rootSelector: group.rootSelector,
-        itemSelector: group.itemSelector,
-        fields: group.fields,
-        columnOrder: group.columnOrder.slice(),
-        hiddenColumns: group.hiddenColumns.slice(),
+        // Legacy single-table shape (first group) for older Walk / readers.
+        rootSelector: primary.rootSelector,
+        itemSelector: primary.itemSelector,
+        fields: primary.fields,
+        columnOrder: primary.columnOrder.slice(),
+        hiddenColumns: primary.hiddenColumns.slice(),
+        groups: groups.map((g) => ({
+          rootSelector: g.rootSelector,
+          itemSelector: g.itemSelector,
+          fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
+          columnOrder: g.columnOrder.slice(),
+          hiddenColumns: g.hiddenColumns.slice(),
+        })),
       };
+      // #region agent log
+      debugLog("A", "content.js:cs-save", "saving recipe with all groups", {
+        totalGroups: state.groups.length,
+        allGroups: state.groups.map((g, i) => ({
+          i,
+          fieldNames: g.fields.map((f) => f.name),
+          itemSelector: g.itemSelector,
+          rootSelector: g.rootSelector,
+        })),
+        savedFieldNames: (recipe.fields || []).map((f) => f.name),
+        savedGroupCount: (recipe.groups || []).length,
+        savedGroupFields: (recipe.groups || []).map((g) => g.fields.map((f) => f.name)),
+        savedItemSelector: recipe.itemSelector,
+        savedRootSelector: recipe.rootSelector,
+        droppedGroupFields: [],
+      });
+      // #endregion
       await NS.storage.saveRecipe(recipe);
       let count = 0;
       try {
@@ -643,10 +711,11 @@
       } catch {
         /* save already succeeded */
       }
+      const fieldTotal = groups.reduce((n, g) => n + g.fields.length, 0);
       if (NS.storage.shouldNudgeRecipes?.(count)) {
-        setHint(`Recipe saved. ${NS.storage.recipeNudgeCopy(count)}`);
+        setHint(`Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). ${NS.storage.recipeNudgeCopy(count)}`);
       } else {
-        setHint("Recipe saved. Open the extension popup to re-run.");
+        setHint(`Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). Open the extension popup to re-run.`);
       }
     });
     overlay.querySelector("#cs-stop")?.addEventListener("click", stopPicker);
@@ -689,28 +758,77 @@
   }
 
   async function runRecipe(recipe) {
-    const group = createGroup({
-      rootSelector: recipe.rootSelector || "",
-      itemSelector: recipe.itemSelector || "*",
-      items: [],
-    });
-    group.fields = recipe.fields || [];
-    group.columnOrder = Array.isArray(recipe.columnOrder)
-      ? recipe.columnOrder.slice()
-      : group.fields.map((f) => f.name);
-    group.hiddenColumns = Array.isArray(recipe.hiddenColumns) ? recipe.hiddenColumns.slice() : [];
-    state.groups = [group];
+    const specs =
+      Array.isArray(recipe?.groups) && recipe.groups.length
+        ? recipe.groups
+        : [
+            {
+              rootSelector: recipe?.rootSelector || "",
+              itemSelector: recipe?.itemSelector || "*",
+              fields: recipe?.fields || [],
+              columnOrder: recipe?.columnOrder,
+              hiddenColumns: recipe?.hiddenColumns,
+            },
+          ];
+
+    const built = [];
+    const allItems = [];
+    for (const spec of specs) {
+      const group = createGroup({
+        rootSelector: spec.rootSelector || "",
+        itemSelector: spec.itemSelector || "*",
+        items: [],
+      });
+      group.fields = (spec.fields || []).map((f) => ({
+        name: f.name,
+        relativeSelector: f.relativeSelector,
+      }));
+      group.columnOrder = Array.isArray(spec.columnOrder)
+        ? spec.columnOrder.slice()
+        : group.fields.map((f) => f.name);
+      group.hiddenColumns = Array.isArray(spec.hiddenColumns) ? spec.hiddenColumns.slice() : [];
+      const subRecipe = {
+        rootSelector: group.rootSelector,
+        itemSelector: group.itemSelector,
+        fields: group.fields,
+      };
+      const result = NS.extract.retrieve?.(subRecipe) || {
+        items: [],
+        rows: NS.extract.extractRows(subRecipe),
+      };
+      group.rows = result.rows || [];
+      group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+      allItems.push(...group.liveItems);
+      built.push(group);
+    }
+
+    state.groups = built;
     state.walked = false;
-    const result = NS.extract.retrieve?.(recipe) || {
-      items: [],
-      rows: NS.extract.extractRows(recipe),
-    };
-    group.rows = result.rows || [];
-    highlightRetrievedItems(result.items || []);
+    // #region agent log
+    const sampleRows = built.map((g) => (g.rows && g.rows[0]) || {});
+    debugLog("C", "content.js:runRecipe", "ran saved recipe", {
+      hasGroupsArray: Array.isArray(recipe?.groups),
+      recipeGroupsLen: Array.isArray(recipe?.groups) ? recipe.groups.length : 0,
+      legacyFieldNames: (recipe?.fields || []).map((f) => f.name),
+      specCount: specs.length,
+      groupCount: built.length,
+      groupFieldNames: built.map((g) => g.fields.map((f) => f.name)),
+      rowCounts: built.map((g) => (g.rows || []).length),
+      sampleRows,
+      nonEmptyByGroup: sampleRows.map((row) =>
+        Object.keys(row).filter((k) => String(row[k] || "").trim())
+      ),
+    });
+    // #endregion
+    highlightRetrievedItems(allItems);
     NS.overlay.ensureOverlay();
     bindOverlay();
     applyColumnView();
-    setHint(`Ran saved recipe — ${group.rows.length} row(s). Walk pages or Export.`);
+    const totalRows = built.reduce((n, g) => n + (g.rows?.length || 0), 0);
+    const totalFields = built.reduce((n, g) => n + (g.fields?.length || 0), 0);
+    setHint(
+      `Ran saved recipe — ${built.length} table(s), ${totalFields} field(s), ${totalRows} row(s). Walk pages or Export.`
+    );
   }
 
   chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
