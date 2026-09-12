@@ -77,6 +77,48 @@ describe("overlay preview", () => {
     assert.equal(overlay.getPreviewRowLimit(), 50);
   });
 
+  it("shows custom table name and rename fires onRenameTable", () => {
+    const calls = [];
+    overlay.setSessionHandlers({
+      onRenameTable(gi, next) {
+        calls.push([gi, next]);
+      },
+    });
+    overlay.setRowHandlers({
+      onEditCell() {},
+    });
+    overlay.renderPreview([], [], {
+      tables: [
+        {
+          groupIndex: 0,
+          name: "Sizes",
+          columns: ["Size"],
+          rows: [{ Size: "M" }],
+        },
+      ],
+    });
+    const label = document.querySelector("[data-cs-rename-table]");
+    assert.ok(label);
+    assert.equal(label.textContent, "Sizes");
+    click(label);
+    const input = label.querySelector("input");
+    assert.ok(input);
+    input.value = "Swatches";
+    input.dispatchEvent(new document.defaultView.Event("blur", { bubbles: true }));
+    assert.deepEqual(calls, [[0, "Swatches"]]);
+  });
+
+  it("defaults to Table N when name is empty", () => {
+    overlay.renderPreview([], [], {
+      tables: [
+        { groupIndex: 0, columns: ["A"], rows: [{ A: "1" }] },
+        { groupIndex: 1, columns: ["B"], rows: [{ B: "2" }] },
+      ],
+    });
+    const labels = [...document.querySelectorAll(".cs-table-label")].map((el) => el.textContent);
+    assert.deepEqual(labels, ["Table 1", "Table 2"]);
+  });
+
   it("shows empty copy when there are no columns", () => {
     overlay.renderPreview([], []);
     const empty = document.querySelector("#cs-preview .cs-empty");

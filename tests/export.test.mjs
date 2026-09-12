@@ -73,4 +73,17 @@ describe("export", () => {
     assert.deepEqual(parsed[0], { columns: ["Pack"], rows: [{ Pack: "5" }] });
     assert.deepEqual(parsed[1], { columns: ["Size"], rows: [{ Size: "Small" }] });
   });
+
+  it("toJsonTables includes name when set; toCsvTables ignores name", () => {
+    const tables = [
+      { name: "Pack count", columns: ["Pack"], rows: [{ Pack: "5" }] },
+      { name: "Sizes", columns: ["Size"], rows: [{ Size: "Small" }] },
+    ];
+    const parsed = JSON.parse(ClickScrape.export.toJsonTables(tables));
+    assert.equal(parsed[0].name, "Pack count");
+    assert.equal(parsed[1].name, "Sizes");
+    const csv = ClickScrape.export.toCsvTables(tables);
+    assert.deepEqual(csv.split("\n"), ["Pack", "5", "", "Size", "Small"]);
+    assert.ok(!csv.includes("Pack count"));
+  });
 });

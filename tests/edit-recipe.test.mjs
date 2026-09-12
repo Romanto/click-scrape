@@ -127,4 +127,47 @@ describe("editable saved recipes", () => {
     assert.equal(document.querySelectorAll("#cs-preview .cs-preview-table").length, 2);
     assert.ok(document.getElementById("cs-preview").textContent.includes("play music"));
   });
+
+  it("renaming a table persists on Update and rematches on Edit", async () => {
+    const html = loadFixture("noisy-bullets.html");
+    const { document, startPicker, pick, fire, send, getStore } = loadPicker(html);
+
+    startPicker();
+    const about = [...document.querySelectorAll("h1")].find((h) => h.textContent.trim() === "About this item");
+    const ask = [...document.querySelectorAll("h2")].find((h) => h.textContent.trim() === "Ask Alexa");
+    pick(about);
+    pick(ask);
+    assert.equal(document.querySelectorAll(".cs-table-label").length, 2);
+    assert.equal(document.querySelectorAll(".cs-table-label")[0].textContent, "Table 1");
+
+    const label = document.querySelector('.cs-preview-table[data-cs-group="0"] [data-cs-rename-table]');
+    assert.ok(label);
+    fire(label, "click");
+    const input = label.querySelector("input");
+    assert.ok(input);
+    input.value = "About bullets";
+    input.dispatchEvent(new document.defaultView.Event("blur", { bubbles: true }));
+    assert.equal(
+      document.querySelector('.cs-preview-table[data-cs-group="0"] .cs-table-label').textContent,
+      "About bullets"
+    );
+
+    fire(document.querySelector("#cs-save"), "click");
+    await flush();
+    const saved = getStore().clickScrapeRecipes[0];
+    assert.equal(saved.groups[0].name, "About bullets");
+    assert.equal(saved.groups[1].name, undefined);
+
+    fire(document.querySelector("#cs-stop"), "click");
+    send("CLICK_SCRAPE_EDIT_RECIPE", { recipe: saved });
+    await flush();
+    assert.equal(
+      document.querySelector('.cs-preview-table[data-cs-group="0"] .cs-table-label').textContent,
+      "About bullets"
+    );
+    assert.equal(
+      document.querySelector('.cs-preview-table[data-cs-group="1"] .cs-table-label').textContent,
+      "Table 2"
+    );
+  });
 });

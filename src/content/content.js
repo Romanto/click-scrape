@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "prefs-v1";
+  const BOOT = "table-name-v1";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -13,7 +13,7 @@
 
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
 
-  /** @typedef {{ rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
+  /** @typedef {{ name?: string, rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
 
   let state = {
     active: false,
@@ -70,6 +70,7 @@
 
   function createGroup(ctx) {
     return {
+      name: "",
       rootSelector: ctx?.rootSelector || "",
       itemSelector: ctx?.itemSelector || "*",
       fields: [],
@@ -360,12 +361,16 @@
 
   function getPreviewTables() {
     return state.groups
-      .map((group, groupIndex) => ({
-        groupIndex,
-        columns: groupColumns(group),
-        rows: Array.isArray(group.rows) ? group.rows : [],
-        rowsDirty: !!group.rowsDirty,
-      }))
+      .map((group, groupIndex) => {
+        const name = String(group.name || "").trim();
+        return {
+          groupIndex,
+          name,
+          columns: groupColumns(group),
+          rows: Array.isArray(group.rows) ? group.rows : [],
+          rowsDirty: !!group.rowsDirty,
+        };
+      })
       .filter((t) => t.columns.length);
   }
 
@@ -456,6 +461,26 @@
       selectedByField.delete(fieldKey(gi, oldName));
     }
     applyColumnView();
+  }
+
+  function onRenameTable(groupIndex, nextName) {
+    if (state.walking) return;
+    const gi = Number(groupIndex);
+    if (!Number.isFinite(gi) || !state.groups[gi]) return;
+    const group = state.groups[gi];
+    const trimmed = String(nextName || "").trim();
+    if (!trimmed) {
+      group.name = "";
+      applyColumnView();
+      if (editingRecipeId) scheduleRecipePersist();
+      return;
+    }
+    const used = state.groups
+      .map((g, i) => (i === gi ? "" : String(g.name || "").trim()))
+      .filter(Boolean);
+    group.name = NS.columns.uniqueName(trimmed, used);
+    applyColumnView();
+    if (editingRecipeId) scheduleRecipePersist();
   }
 
   function onDrop(name, groupIndex) {
@@ -592,6 +617,7 @@
     NS.overlay.setSessionHandlers?.({
       onEditRecipe: beginRecipeEdit,
       onPreviewRowLimit: onPreviewRowLimit,
+      onRenameTable,
     });
     syncSessionChrome();
   }
@@ -635,13 +661,18 @@
       fields: primary.fields,
       columnOrder: primary.columnOrder.slice(),
       hiddenColumns: primary.hiddenColumns.slice(),
-      groups: groups.map((g) => ({
-        rootSelector: g.rootSelector,
-        itemSelector: g.itemSelector,
-        fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
-        columnOrder: g.columnOrder.slice(),
-        hiddenColumns: g.hiddenColumns.slice(),
-      })),
+      groups: groups.map((g) => {
+        const entry = {
+          rootSelector: g.rootSelector,
+          itemSelector: g.itemSelector,
+          fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
+          columnOrder: g.columnOrder.slice(),
+          hiddenColumns: g.hiddenColumns.slice(),
+        };
+        const n = String(g.name || "").trim();
+        if (n) entry.name = n;
+        return entry;
+      }),
     };
   }
 
@@ -1074,6 +1105,7 @@
         name: f.name,
         relativeSelector: f.relativeSelector,
       }));
+      group.name = String(spec.name || "").trim();
       group.columnOrder = Array.isArray(spec.columnOrder)
         ? spec.columnOrder.slice()
         : group.fields.map((f) => f.name);
