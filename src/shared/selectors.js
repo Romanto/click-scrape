@@ -89,6 +89,8 @@
 
   /** CSS selector for repeating items under a list root (tag + shared classes when possible). */
   function itemSelectorFor(sample, peers) {
+    // One-item sessions must not rematch every page-wide .celwidget on Walk/save.
+    if (peers.length === 1 && sample?.id) return `#${CSS.escape(sample.id)}`;
     const tag = sample.tagName.toLowerCase();
     const shared = sharedClasses(peers.length ? peers : [sample]);
     if (shared.length) return tag + classSuffix(shared);
@@ -126,11 +128,15 @@
     const isRecord = c.item !== fieldEl && descendants >= 2;
     const matches = countFieldMatches(c.items, c.item, fieldEl);
     const matchRatio = matches / Math.max(c.items.length, 1);
+    const chromeOnly = classes.includes("celwidget");
 
     let score = 0;
-    score += c.items.length * 12;
+    // Prefer groups where the picked field rematches across peers (avoids Amazon
+    // .celwidget chrome filling the preview with empty rows).
+    score += matches * 28;
+    score += matchRatio * 70;
+    score += Math.min(c.items.length, 12) * 4;
     score += Math.min(descendants, 24);
-    score += matchRatio * 20;
     if (semantic) score += 22;
     if (classes.length) score += 10;
     if (isRecord) score += 16;
@@ -138,7 +144,38 @@
     if (LAYOUT_TAGS.has(c.item.tagName)) score -= 24;
     if (descendants > 60) score -= Math.min(40, descendants - 60);
     if (c.items.length === 2 && descendants > 30) score -= 20;
+    if (chromeOnly && matchRatio < 0.85) score -= 100;
+    if (c.items.length >= 4 && matchRatio < 0.5) score -= 120;
     return score;
+  }
+
+  function isDenseCandidate(c, fieldEl) {
+    if (!c?.items?.length) return false;
+    // Heading / chrome beside a list: the field sits outside the rows, so rematch
+    // count is 0 — still a valid list if we already resolved sibling rows.
+    const heading = closestHeading(fieldEl);
+    const onHeading = !!(heading && (heading === fieldEl || heading.contains(fieldEl)));
+    if (onHeading && c.items.every((item) => item !== fieldEl && !item.contains(fieldEl))) {
+      return c.items.length >= 2;
+    }
+    const matches = countFieldMatches(c.items, c.item, fieldEl);
+    const matchRatio = matches / c.items.length;
+    // Sparse rematch = page chrome (Amazon .celwidget) or accidental siblings (price + %).
+    if (c.items.length <= 3) return matches === c.items.length;
+    return matchRatio >= 0.45 || matches >= 3;
+  }
+
+  /** Host for a one-row pick when no dense repeating list exists (PDP price, etc.). */
+  function singletonHost(fieldEl) {
+    return (
+      fieldEl.closest("article, li, tr, section") ||
+      fieldEl.closest(
+        '[class*="product"], [id*="corePrice"], [id*="apex"], [id*="price"]'
+      ) ||
+      fieldEl.closest(".celwidget") ||
+      fieldEl.closest("[class]") ||
+      fieldEl
+    );
   }
 
   function isHeadingNode(el) {
@@ -260,7 +297,10 @@
     const classes = stableClasses(el);
     const out = [];
     const push = (sel) => {
-      if (sel && !out.includes(sel)) out.push(sel);
+      if (!sel || out.includes(sel)) return;
+      // Bare layout tags match too much (price + discount % siblings under one parent).
+      if (/^(div|span|p|i|b|em|strong|section)$/i.test(sel)) return;
+      out.push(sel);
     };
     if (classes.length) {
       push(tag + classSuffix(classes.slice(0, MAX_CLASSES)));
@@ -366,7 +406,10 @@
 
   function candidateFromPeers(fieldEl, peers) {
     if (!peers || peers.length < 2) return null;
-    const item = peers.find((p) => p === fieldEl || p.contains(fieldEl)) || peers[0];
+    const item =
+      innermostMatchRoot(peers, fieldEl) ||
+      peers.find((p) => p === fieldEl || p.contains(fieldEl)) ||
+      peers[0];
     const sharedParent = peersShareParent(peers);
     const root = sharedParent || item.parentElement;
     if (!root) return null;
@@ -478,12 +521,14 @@
 
   function pickCandidate(candidates, fieldEl) {
     if (!candidates.length) return null;
-    let best = candidates[0];
-    let bestScore = scoreCandidate(best, fieldEl);
-    for (let i = 1; i < candidates.length; i += 1) {
-      const score = scoreCandidate(candidates[i], fieldEl);
+    let best = null;
+    let bestScore = -Infinity;
+    for (let i = 0; i < candidates.length; i += 1) {
+      const c = candidates[i];
+      if (!isDenseCandidate(c, fieldEl)) continue;
+      const score = scoreCandidate(c, fieldEl);
       if (score > bestScore) {
-        best = candidates[i];
+        best = c;
         bestScore = score;
       }
     }
@@ -506,19 +551,12 @@
       };
     }
 
-    const fallback =
-      fieldEl.closest("article, li, tr, section") ||
-      fieldEl.closest("[class]") ||
-      fieldEl;
-    const root = fallback.parentElement || document.body;
-    const peers = root
-      ? [...root.children].filter((c) => similarity(c, fallback) >= SIMILARITY_MIN)
-      : [fallback];
-    const items = peers.length ? peers : [fallback];
+    const host = singletonHost(fieldEl);
+    const root = host.parentElement || document.body;
     return {
       root,
-      items,
-      itemSelector: itemSelectorFor(fallback, items),
+      items: [host],
+      itemSelector: itemSelectorFor(host, [host]),
       rootSelector: cssPath(root),
     };
   }

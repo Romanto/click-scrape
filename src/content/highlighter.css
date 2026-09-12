@@ -126,6 +126,16 @@
   box-shadow: 0 0 0 3px rgba(157, 88, 227, 0.1) !important;
 }
 
+#click-scrape-overlay .cs-preview-table {
+  margin-top: 10px !important;
+}
+
+#click-scrape-overlay .cs-preview-table + .cs-preview-table {
+  margin-top: 14px !important;
+  padding-top: 10px !important;
+  border-top: 1px solid #E5E7EB !important;
+}
+
 #click-scrape-overlay table {
   width: 100% !important;
   border-collapse: collapse !important;

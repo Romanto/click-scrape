@@ -303,4 +303,28 @@ describe("selectors", () => {
     assert.ok(packTexts.some((t) => t === "5") && packTexts.some((t) => t === "12"));
     assert.ok(!packTexts.some((t) => t.includes("Small") || t.includes("Medium")));
   });
+
+  it("findListContext on PDP price does not fill empty .celwidget rows", () => {
+    const html = loadFixture("price-discount.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const price = document.querySelector(".a-price-whole");
+    const discount = document.querySelector(".savingsPercentage");
+    const ctx = CS.selectors.findListContext(price);
+    assert.equal(ctx.items.length, 1, "singleton price block, not page-wide .celwidget peers");
+    assert.ok(
+      ctx.items.every((item) => !item.classList.contains("celwidget") || item.id === "apex_desktop" || item.id === "corePrice_desktop" || item.contains(price)),
+      "must not use unrelated empty celwidgets as rows"
+    );
+    const item = ctx.items.find((i) => i.contains(price));
+    assert.ok(item);
+    const fields = [
+      { name: "Price", relativeSelector: CS.selectors.relativeSelector(item, price) },
+      { name: "Discount%", relativeSelector: CS.selectors.relativeSelector(item, discount) },
+    ];
+    const rows = CS.extract.retrieveRowsFromItems(ctx.items, fields);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].Price, "20");
+    assert.equal(rows[0]["Discount%"], "-9%");
+  });
 });

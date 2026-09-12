@@ -149,4 +149,19 @@ describe("overlay preview", () => {
     assert.equal(items[0].querySelector(".cs-field-sel").textContent, ":scope > .title");
     assert.ok(items[0].querySelector('[data-cs-drop="Title"]'));
   });
+
+  it("renderPreview options.tables draws separate tables from row 1", () => {
+    overlay.renderPreview([], [], {
+      tables: [
+        { columns: ["Pack"], rows: [{ Pack: "5" }, { Pack: "12" }], groupIndex: 0 },
+        { columns: ["Size"], rows: [{ Size: "Small" }, { Size: "Medium" }], groupIndex: 1 },
+      ],
+    });
+    const tables = document.querySelectorAll("#cs-preview .cs-preview-table");
+    assert.equal(tables.length, 2);
+    assert.ok(tables[0].textContent.includes("5"));
+    assert.ok(!tables[0].textContent.includes("Small"));
+    assert.ok(tables[1].textContent.includes("Small"));
+    assert.ok(!tables[1].textContent.includes("12"));
+  });
 });

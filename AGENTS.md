@@ -77,7 +77,8 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 5. **Pagination:** same-origin next HTML only; dedupe by concatenated visible column values; abort on Stop; no row upload.
 6. **Soft cap:** UX nudge only (never “create an account”); does not block save/walk.
 7. **No** `fetch` of scraped rows/recipes; permissions stay minimal.
-8. **One live list (with sibling append):** `liveItems` is the current repeating group. A **nested** disjoint list under a greedy first pick (title → `.celwidget`, then About this item → `<li>`) **replaces** that session. A **sibling** disjoint list (pack-count then Size) **appends** items so both dimensions stay in the preview. Same-list clicks still add columns.
+8. **List groups (multi-table preview):** each repeating list is a **group** with its own `liveItems` / fields / rows. A **nested** disjoint list under a greedy first pick **replaces** all groups. A **sibling** disjoint list **starts a new group** (own table from row 1). A click **outside every current live item** (e.g. price block → shipping line) also starts a new group — never glue onto the last group (that yields empty cells). Same-list clicks still add columns to that group. Export concatenates groups with a blank CSV separator (JSON array of tables). Saved recipes store a `groups[]` array (legacy top-level `fields` / `rootSelector` remain the first group for Walk).
+9. **Dense list peers only:** `findListContext` must not treat page-wide `.celwidget` (or other sparse peers) as rows when the picked field rematches only one of them — fall back to a singleton host (e.g. `#corePrice_desktop`) so Price + Discount% yield one filled row, not a table of blanks.
 
 ## How to verify
 

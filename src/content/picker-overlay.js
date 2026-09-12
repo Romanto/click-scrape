@@ -59,7 +59,8 @@
       if (drop && el.contains(drop) && !drop.disabled) {
         e.preventDefault();
         const name = drop.getAttribute("data-cs-drop");
-        if (name) callHandler("onDrop", name);
+        const group = drop.getAttribute("data-cs-group");
+        if (name) callHandler("onDrop", name, group == null || group === "" ? undefined : Number(group));
         return;
       }
 
@@ -68,7 +69,10 @@
         e.preventDefault();
         const name = move.getAttribute("data-cs-move");
         const dir = Number(move.getAttribute("data-cs-dir"));
-        if (name && (dir === -1 || dir === 1)) callHandler("onMove", name, dir);
+        const group = move.getAttribute("data-cs-group");
+        if (name && (dir === -1 || dir === 1)) {
+          callHandler("onMove", name, dir, group == null || group === "" ? undefined : Number(group));
+        }
         return;
       }
 
@@ -95,6 +99,8 @@
   function startRename(nameEl) {
     if (nameEl.querySelector("input")) return;
     const oldName = nameEl.getAttribute("data-cs-rename") || "";
+    const groupAttr = nameEl.getAttribute("data-cs-group");
+    const groupIndex = groupAttr == null || groupAttr === "" ? undefined : Number(groupAttr);
     const input = document.createElement("input");
     input.type = "text";
     input.className = "cs-th-input";
@@ -110,7 +116,7 @@
       done = true;
       const next = input.value.trim();
       nameEl.textContent = oldName;
-      if (save && next && next !== oldName) callHandler("onRename", oldName, next);
+      if (save && next && next !== oldName) callHandler("onRename", oldName, next, groupIndex);
     };
 
     input.addEventListener("keydown", (e) => {
@@ -133,10 +139,12 @@
       .map((f) => {
         const name = f?.name ?? "";
         const sel = f?.relativeSelector ?? "";
+        const gi = f?.groupIndex;
+        const groupAttr = gi == null ? "" : ` data-cs-group="${escapeHtml(String(gi))}"`;
         return `<li class="cs-field">
           <div class="cs-field-main">
             <strong class="cs-field-name">${escapeHtml(name)}</strong>
-            <button type="button" class="cs-col-btn cs-col-drop" data-cs-drop="${escapeHtml(name)}" title="Remove column">×</button>
+            <button type="button" class="cs-col-btn cs-col-drop" data-cs-drop="${escapeHtml(name)}"${groupAttr} title="Remove column">×</button>
           </div>
           <code class="cs-field-sel" title="${escapeHtml(sel)}">${escapeHtml(sel)}</code>
         </li>`;
@@ -154,33 +162,24 @@
     return "";
   }
 
-  function renderPreview(rows, columns, options) {
-    const box = document.getElementById("cs-preview");
-    if (!box) return;
+  function renderTableHtml(rows, columns, groupIndex) {
     const rowList = Array.isArray(rows) ? rows : [];
     const cols = Array.isArray(columns) ? columns : [];
-    const opts = options && typeof options === "object" ? options : {};
-    visibleColumns = cols.slice();
-
-    const empty = emptyCopy(rowList, cols, opts);
-    if (empty) {
-      box.innerHTML = `<p class="cs-empty">${escapeHtml(empty)}</p>`;
-      return;
-    }
-
+    const gi = groupIndex == null ? "" : String(groupIndex);
     const slice = rowList.slice(0, PREVIEW_LIMIT);
     const last = cols.length - 1;
+    const groupAttr = gi === "" ? "" : ` data-cs-group="${escapeHtml(gi)}"`;
     const head = cols
       .map((c, i) => {
         const upOff = i === 0 ? " disabled" : "";
         const downOff = i === last ? " disabled" : "";
-        return `<th data-cs-col="${escapeHtml(c)}">
+        return `<th data-cs-col="${escapeHtml(c)}"${groupAttr}>
           <div class="cs-th">
-            <span class="cs-th-name" data-cs-rename="${escapeHtml(c)}" tabindex="0" title="Rename column">${escapeHtml(c)}</span>
+            <span class="cs-th-name" data-cs-rename="${escapeHtml(c)}" data-cs-group="${escapeHtml(gi)}" tabindex="0" title="Rename column">${escapeHtml(c)}</span>
             <span class="cs-th-actions">
-              <button type="button" class="cs-col-btn" data-cs-move="${escapeHtml(c)}" data-cs-dir="-1" title="Move up"${upOff}>↑</button>
-              <button type="button" class="cs-col-btn" data-cs-move="${escapeHtml(c)}" data-cs-dir="1" title="Move down"${downOff}>↓</button>
-              <button type="button" class="cs-col-btn cs-col-drop" data-cs-drop="${escapeHtml(c)}" title="Drop column">×</button>
+              <button type="button" class="cs-col-btn" data-cs-move="${escapeHtml(c)}" data-cs-dir="-1" data-cs-group="${escapeHtml(gi)}" title="Move up"${upOff}>↑</button>
+              <button type="button" class="cs-col-btn" data-cs-move="${escapeHtml(c)}" data-cs-dir="1" data-cs-group="${escapeHtml(gi)}" title="Move down"${downOff}>↓</button>
+              <button type="button" class="cs-col-btn cs-col-drop" data-cs-drop="${escapeHtml(c)}" data-cs-group="${escapeHtml(gi)}" title="Drop column">×</button>
             </span>
           </div>
         </th>`;
@@ -197,11 +196,46 @@
             .join("")}</tr>`
       )
       .join("");
-    box.innerHTML = `<table>
+    return `<div class="cs-preview-table"${groupAttr}>
+      <table>
         <thead><tr>${head}</tr></thead>
         <tbody>${body}</tbody>
       </table>
-      <p class="cs-hint">${rowList.length} row(s) — showing ${slice.length}</p>`;
+      <p class="cs-hint">${rowList.length} row(s) — showing ${slice.length}</p>
+    </div>`;
+  }
+
+  function renderPreview(rows, columns, options) {
+    const box = document.getElementById("cs-preview");
+    if (!box) return;
+    const opts = options && typeof options === "object" ? options : {};
+    const tables = Array.isArray(opts.tables) ? opts.tables : null;
+
+    if (tables) {
+      visibleColumns = tables.flatMap((t) => (Array.isArray(t?.columns) ? t.columns : []));
+      const usable = tables.filter((t) => Array.isArray(t?.columns) && t.columns.length);
+      if (!usable.length) {
+        const empty = emptyCopy([], [], opts);
+        box.innerHTML = `<p class="cs-empty">${escapeHtml(empty || "Click elements to add columns.")}</p>`;
+        return;
+      }
+      box.innerHTML = usable
+        .map((t, i) => renderTableHtml(t.rows || [], t.columns || [], t.groupIndex ?? i))
+        .join("");
+      return;
+    }
+
+    const rowList = Array.isArray(rows) ? rows : [];
+    const cols = Array.isArray(columns) ? columns : [];
+    visibleColumns = cols.slice();
+
+    const empty = emptyCopy(rowList, cols, opts);
+    if (empty) {
+      box.innerHTML = `<p class="cs-empty">${escapeHtml(empty)}</p>`;
+      return;
+    }
+
+    box.innerHTML = renderTableHtml(rowList, cols, opts.groupIndex);
   }
 
   function escapeHtml(s) {
