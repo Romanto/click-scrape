@@ -85,6 +85,27 @@ export function loadPicker(html, options = {}) {
     window.CSS?.escape ??
     ((value) => String(value).replace(/([^\w-])/g, "\\$1"));
 
+  let store = { ...(options.storage || {}) };
+  const chromeStorage = {
+    local: {
+      async get(keys) {
+        if (keys == null) return { ...store };
+        if (typeof keys === "string") return { [keys]: store[keys] };
+        if (Array.isArray(keys)) {
+          const out = {};
+          for (const k of keys) out[k] = store[k];
+          return out;
+        }
+        const out = {};
+        for (const k of Object.keys(keys)) out[k] = store[k] ?? keys[k];
+        return out;
+      },
+      async set(obj) {
+        store = { ...store, ...obj };
+      },
+    },
+  };
+
   const sandbox = {
     console,
     document,
@@ -94,7 +115,9 @@ export function loadPicker(html, options = {}) {
     HTMLElement: window.HTMLElement,
     CSS: { escape: cssEscape },
     location: { href: options.locationHref || "http://127.0.0.1:8765/demo.html" },
-    crypto: { randomUUID: () => "test-id" },
+    crypto: {
+      randomUUID: () => (typeof options.randomUUID === "function" ? options.randomUUID() : "test-id"),
+    },
     AbortController,
     chrome: {
       runtime: {
@@ -104,6 +127,7 @@ export function loadPicker(html, options = {}) {
           },
         },
       },
+      storage: chromeStorage,
     },
   };
   sandbox.globalThis = sandbox;
@@ -132,7 +156,16 @@ export function loadPicker(html, options = {}) {
     fire(el, "click");
   }
 
-  return { window, document, sandbox, send, fire, startPicker, pick };
+  return {
+    window,
+    document,
+    sandbox,
+    send,
+    fire,
+    startPicker,
+    pick,
+    getStore: () => store,
+  };
 }
 
 /** Resolve a field element from an item using an item-relative selector. */

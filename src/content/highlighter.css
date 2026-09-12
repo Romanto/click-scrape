@@ -55,11 +55,14 @@
   color: #2D2A4A !important;
 }
 
-#click-scrape-overlay .cs-row {
-  display: flex !important;
-  gap: 6px !important;
-  flex-wrap: wrap !important;
-  margin: 8px 0 !important;
+#click-scrape-overlay [hidden] {
+  display: none !important;
+}
+
+#click-scrape-overlay button:disabled {
+  opacity: 0.45 !important;
+  cursor: not-allowed !important;
+  transform: none !important;
 }
 
 #click-scrape-overlay button,

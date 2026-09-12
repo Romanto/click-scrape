@@ -48,6 +48,7 @@ describe("overlay preview", () => {
       "escapeHtml",
       "setColumnHandlers",
       "setRowHandlers",
+      "setSessionHandlers",
       "getVisibleColumns",
       "markTableDirty",
     ]) {
@@ -165,6 +166,28 @@ describe("overlay preview", () => {
     assert.ok(!tables[0].textContent.includes("Small"));
     assert.ok(tables[1].textContent.includes("Small"));
     assert.ok(!tables[1].textContent.includes("12"));
+  });
+
+  it("shows Edit recipe control (hidden until Run)", () => {
+    const btn = document.querySelector("#cs-edit-recipe");
+    assert.ok(btn);
+    assert.equal(btn.textContent, "Edit recipe");
+    assert.equal(btn.hidden, true);
+    assert.equal(document.querySelector("#cs-new-list"), null);
+  });
+
+  it("session handler fires for Edit recipe", () => {
+    const calls = [];
+    overlay.setSessionHandlers({
+      onEditRecipe() {
+        calls.push("edit");
+      },
+    });
+    const editBtn = document.querySelector("#cs-edit-recipe");
+    editBtn.hidden = false;
+    editBtn.disabled = false;
+    click(editBtn);
+    assert.deepEqual(calls, ["edit"]);
   });
 
   it("row handlers fire for cell edit, add, and delete", () => {

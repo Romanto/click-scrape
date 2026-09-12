@@ -1,7 +1,14 @@
 (() => {
-  if (globalThis.__clickScrapeLoaded) {
+  const BOOT = "edit-ux-v4";
+  if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
+  try {
+    globalThis.__clickScrapeTeardown?.();
+  } catch {
+    /* previous session may already be gone */
+  }
+  globalThis.__clickScrapeBoot = BOOT;
   globalThis.__clickScrapeLoaded = true;
 
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
@@ -25,6 +32,10 @@
   let retrievedItemNodes = [];
   /** @type {Map<string, Set<Element>>} key = `${groupIndex}::${fieldName}` */
   let selectedByField = new Map();
+  /** @type {string | null} */
+  let editingRecipeId = null;
+  /** @type {{ name?: string, createdAt?: number } | null} */
+  let editingRecipeMeta = null;
 
   function fieldKey(groupIndex, name) {
     return `${groupIndex}::${name}`;
@@ -424,17 +435,7 @@
     if (field) clearFieldOutlines(gi, field.name, field.relativeSelector);
     if (!group.fields.length) {
       state.groups.splice(gi, 1);
-      // Remap selected keys after splice
-      const nextMap = new Map();
-      selectedByField.forEach((set, key) => {
-        const [idxStr, ...rest] = key.split("::");
-        let idx = Number(idxStr);
-        if (Number.isNaN(idx)) return;
-        if (idx === gi) return;
-        if (idx > gi) idx -= 1;
-        nextMap.set(fieldKey(idx, rest.join("::")), set);
-      });
-      selectedByField = nextMap;
+      remapSelectedAfterGroupRemoved(gi);
     }
     if (!state.groups.length) {
       clearSelectedMarks();
@@ -455,14 +456,91 @@
     applyColumnView();
   }
 
+  function remapSelectedAfterGroupRemoved(removedIndex) {
+    const nextMap = new Map();
+    selectedByField.forEach((set, key) => {
+      const [idxStr, ...rest] = key.split("::");
+      let idx = Number(idxStr);
+      if (Number.isNaN(idx)) return;
+      if (idx === removedIndex) return;
+      if (idx > removedIndex) idx -= 1;
+      nextMap.set(fieldKey(idx, rest.join("::")), set);
+    });
+    selectedByField = nextMap;
+  }
+
+  function syncSessionChrome() {
+    syncSaveButtonLabel();
+    syncEditRecipeButton();
+  }
+
+  function syncEditRecipeButton() {
+    const btn = document.querySelector("#cs-edit-recipe");
+    if (!btn) return;
+    // After Run: offer Edit so the user can add fields, then Update.
+    const show = !!editingRecipeId && !state.active && !state.walking;
+    btn.hidden = !show;
+    btn.disabled = !show;
+  }
+
+  function beginRecipeEdit() {
+    if (!editingRecipeId || state.walking) return;
+    if (!state.active) {
+      startPicker({ preserveGroups: true });
+    }
+    syncSessionChrome();
+    const n = state.groups.length;
+    setHint(
+      `Editing recipe — ${n} table(s). Click the page to add fields or lists. Update recipe when done.`
+    );
+  }
+
   function bindColumnHandlers() {
     if (state.walking) {
       NS.overlay.setColumnHandlers({});
       NS.overlay.setRowHandlers?.({});
+      NS.overlay.setSessionHandlers?.({});
+      syncSessionChrome();
       return;
     }
     NS.overlay.setColumnHandlers({ onRename, onDrop, onMove });
-    NS.overlay.setRowHandlers?.({ onEditCell, onAddRow, onDeleteRow, onResetRows });
+    NS.overlay.setRowHandlers?.({
+      onEditCell,
+      onAddRow,
+      onDeleteRow,
+      onResetRows,
+    });
+    NS.overlay.setSessionHandlers?.({
+      onEditRecipe: beginRecipeEdit,
+    });
+    syncSessionChrome();
+  }
+
+  function syncSaveButtonLabel() {
+    const btn = document.querySelector("#cs-save");
+    if (!btn) return;
+    btn.textContent = editingRecipeId ? "Update recipe" : "Save recipe";
+  }
+
+  function clearEditingSession() {
+    editingRecipeId = null;
+    editingRecipeMeta = null;
+    syncSessionChrome();
+  }
+
+  function attachRecipeSession(recipe) {
+    editingRecipeId = recipe?.id || null;
+    editingRecipeMeta = recipe?.id
+      ? { name: recipe.name, createdAt: recipe.createdAt }
+      : null;
+  }
+
+  function deactivatePicking() {
+    if (!state.active) return;
+    state.active = false;
+    document.removeEventListener("mousemove", onMouseMove, true);
+    document.removeEventListener("click", onClick, true);
+    document.removeEventListener("keydown", onKeyDown, true);
   }
 
   function anyRowsDirty() {
@@ -712,10 +790,16 @@
       const groups = state.groups.filter((g) => g.fields?.length && g.rootSelector);
       if (!groups.length) return;
       const primary = groups[0];
+      const updating = !!editingRecipeId;
       const recipe = {
-        id: crypto.randomUUID(),
-        name: `Recipe ${new Date().toLocaleString()}`,
-        createdAt: Date.now(),
+        id: editingRecipeId || crypto.randomUUID(),
+        name: updating && editingRecipeMeta?.name
+          ? editingRecipeMeta.name
+          : `Recipe ${new Date().toLocaleString()}`,
+        createdAt:
+          updating && editingRecipeMeta?.createdAt != null
+            ? editingRecipeMeta.createdAt
+            : Date.now(),
         pageUrl: location.href,
         // Legacy single-table shape (first group) for older Walk / readers.
         rootSelector: primary.rootSelector,
@@ -732,6 +816,9 @@
         })),
       };
       await NS.storage.saveRecipe(recipe);
+      if (updating) {
+        editingRecipeMeta = { name: recipe.name, createdAt: recipe.createdAt };
+      }
       let count = 0;
       try {
         const recipes = await NS.storage.listRecipes();
@@ -740,26 +827,38 @@
         /* save already succeeded */
       }
       const fieldTotal = groups.reduce((n, g) => n + g.fields.length, 0);
+      const verb = updating ? "updated" : "saved";
       if (NS.storage.shouldNudgeRecipes?.(count)) {
-        setHint(`Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). ${NS.storage.recipeNudgeCopy(count)}`);
+        setHint(`Recipe ${verb} (${groups.length} table(s), ${fieldTotal} field(s)). ${NS.storage.recipeNudgeCopy(count)}`);
       } else {
-        setHint(`Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). Open the extension popup to re-run.`);
+        setHint(
+          updating
+            ? `Recipe updated (${groups.length} table(s), ${fieldTotal} field(s)).`
+            : `Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). Open the extension popup to re-run.`
+        );
       }
     });
     overlay.querySelector("#cs-stop")?.addEventListener("click", stopPicker);
   }
 
-  function startPicker() {
+  function startPicker(options = {}) {
     if (state.active) return;
     state.active = true;
-    state.groups = [];
+    if (!options.preserveGroups) {
+      state.groups = [];
+      selectedByField.clear();
+      clearEditingSession();
+    }
     state.walked = false;
-    selectedByField.clear();
     bindOverlay();
+    syncSessionChrome();
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown, true);
     refreshUi();
+    if (!editingRecipeId) {
+      setHint("Hover and click to add columns. Esc cancels.");
+    }
   }
 
   function stopPicker() {
@@ -772,6 +871,7 @@
     walkController = null;
     state.active = false;
     state.walking = false;
+    clearEditingSession();
     clearHover();
     clearRetrievedItems();
     selectedByField.clear();
@@ -785,7 +885,29 @@
     NS.overlay.removeOverlay();
   }
 
+  globalThis.__clickScrapeTeardown = () => {
+    try {
+      stopPicker();
+    } catch {
+      /* ignore */
+    }
+    try {
+      document.getElementById("click-scrape-overlay")?.remove();
+    } catch {
+      /* ignore */
+    }
+    if (globalThis.__clickScrapeHandleMessage === handleRuntimeMessage) {
+      globalThis.__clickScrapeHandleMessage = null;
+    }
+    globalThis.__clickScrapeBoot = null;
+    globalThis.__clickScrapeLoaded = false;
+    globalThis.__clickScrapeTeardown = null;
+  };
+
   async function runRecipe(recipe) {
+    deactivatePicking();
+    attachRecipeSession(recipe);
+
     const specs =
       Array.isArray(recipe?.groups) && recipe.groups.length
         ? recipe.groups
@@ -836,14 +958,20 @@
     NS.overlay.ensureOverlay();
     bindOverlay();
     applyColumnView();
+    syncSessionChrome();
     const totalRows = built.reduce((n, g) => n + (g.rows?.length || 0), 0);
     const totalFields = built.reduce((n, g) => n + (g.fields?.length || 0), 0);
     setHint(
-      `Ran saved recipe — ${built.length} table(s), ${totalFields} field(s), ${totalRows} row(s). Walk pages or Export.`
+      `Ran saved recipe — ${built.length} table(s), ${totalFields} field(s), ${totalRows} row(s). Edit recipe to add fields, or Export / Walk.`
     );
   }
 
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  async function editRecipe(recipe) {
+    await runRecipe(recipe);
+    beginRecipeEdit();
+  }
+
+  function handleRuntimeMessage(msg, _sender, sendResponse) {
     if (msg?.type === "CLICK_SCRAPE_START") {
       startPicker();
       sendResponse({ ok: true });
@@ -853,11 +981,24 @@
     } else if (msg?.type === "CLICK_SCRAPE_RUN_RECIPE") {
       runRecipe(msg.recipe);
       sendResponse({ ok: true });
+    } else if (msg?.type === "CLICK_SCRAPE_EDIT_RECIPE") {
+      editRecipe(msg.recipe);
+      sendResponse({ ok: true });
     } else if (msg?.type === "CLICK_SCRAPE_TOGGLE") {
       if (state.active) stopPicker();
       else startPicker();
       sendResponse({ ok: true, active: state.active });
     }
     return true;
-  });
+  }
+
+  // One durable listener; re-injects swap the handler instead of stacking listeners.
+  if (!globalThis.__clickScrapeMsgBound) {
+    globalThis.__clickScrapeMsgBound = true;
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      const fn = globalThis.__clickScrapeHandleMessage;
+      if (typeof fn === "function") return fn(msg, sender, sendResponse);
+    });
+  }
+  globalThis.__clickScrapeHandleMessage = handleRuntimeMessage;
 })();

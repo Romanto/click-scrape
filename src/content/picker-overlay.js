@@ -4,6 +4,7 @@
 
   let columnHandlers = {};
   let rowHandlers = {};
+  let sessionHandlers = {};
   let visibleColumns = [];
   let rowEditingEnabled = false;
 
@@ -14,6 +15,10 @@
   function setRowHandlers(handlers) {
     rowHandlers = handlers && typeof handlers === "object" ? handlers : {};
     rowEditingEnabled = Object.keys(rowHandlers).length > 0;
+  }
+
+  function setSessionHandlers(handlers) {
+    sessionHandlers = handlers && typeof handlers === "object" ? handlers : {};
   }
 
   function getVisibleColumns() {
@@ -32,6 +37,11 @@
 
   function ensureOverlay() {
     let el = document.getElementById("click-scrape-overlay");
+    // Rebuild if an older inject left a panel without Edit recipe.
+    if (el && !el.querySelector("#cs-edit-recipe")) {
+      el.remove();
+      el = null;
+    }
     if (el) {
       bindOverlayUi(el);
       return el;
@@ -40,7 +50,7 @@
     el.id = "click-scrape-overlay";
     el.innerHTML = `
       <h2>Nestix</h2>
-      <p class="cs-hint">Hover and click elements to add columns. Esc cancels.</p>
+      <p class="cs-hint">Hover and click to add columns. Esc cancels.</p>
       <div class="cs-row">
         <input id="cs-field-name" placeholder="Column name (e.g. Title)" />
         <button type="button" id="cs-undo" class="secondary">Undo</button>
@@ -49,6 +59,7 @@
       <div class="cs-row">
         <button type="button" id="cs-export-csv">Export CSV</button>
         <button type="button" id="cs-export-json" class="secondary">Export JSON</button>
+        <button type="button" id="cs-edit-recipe" class="secondary" hidden>Edit recipe</button>
         <button type="button" id="cs-save" class="secondary">Save recipe</button>
         <button type="button" id="cs-stop" class="danger">Stop</button>
       </div>
@@ -66,6 +77,14 @@
     el.addEventListener("click", (e) => {
       const t = e.target;
       if (!t || typeof t.closest !== "function") return;
+
+      const editRecipe = t.closest("#cs-edit-recipe");
+      if (editRecipe && el.contains(editRecipe) && !editRecipe.disabled && !editRecipe.hidden) {
+        e.preventDefault();
+        e.stopPropagation();
+        callHandler(sessionHandlers, "onEditRecipe");
+        return;
+      }
 
       const delRow = t.closest("[data-cs-del-row]");
       if (delRow && el.contains(delRow) && !delRow.disabled) {
@@ -392,6 +411,7 @@
     escapeHtml,
     setColumnHandlers,
     setRowHandlers,
+    setSessionHandlers,
     getVisibleColumns,
     markTableDirty,
   };

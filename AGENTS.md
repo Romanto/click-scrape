@@ -22,7 +22,7 @@ Chrome MV3, **zero-build vanilla JS**. Scripts inject at runtime via the service
 | `src/content/picker-overlay.js` | Overlay chrome + preview controls | Does **not** mutate recipe; fires handlers |
 | `src/content/highlighter.css` | Hover / selected / **similar** / overlay CSS | Host-isolated overlay (`all: initial`) |
 | `src/background/service-worker.js` | Inject + message relay only | No scrape / storage / export logic |
-| `src/popup/*` | Start picking + recipe list | Thin; no full preview |
+| `src/popup/*` | Start picking + recipe list | Thin; Edit / Run / Del; no full preview |
 | `demo.html`, `demo-page-2.html` | Nested cards + pagination fixtures | Serve over HTTP for Walk |
 | `tests/**` | Contract tests (`npm test`) | linkedom; do not weaken for old bugs |
 
@@ -82,6 +82,7 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 9. **Dense list peers only:** `findListContext` must not treat page-wide `.celwidget` (or other sparse peers) as rows when the picked field rematches only one of them — fall back to a singleton host (e.g. `#corePrice_desktop`) so Price + Discount% yield one filled row, not a table of blanks.
 10. **Preview row edit:** users may edit cells, add rows, and delete rows in the overlay. That sets `rowsDirty` so `refreshGroupRows` will not overwrite edits. **Reset from page** clears dirty and re-scrapes. Recipes never store row payloads — Run always re-scrapes. Export uses the edited `group.rows`.
 11. **Unique ids in selectors:** `cssPath` / singleton `itemSelector` must not stop on an `id` that appears more than once in the document (Amazon reuses `#tp-inline-twister-dim-values-container`). Prefer a unique ancestor (e.g. `#inline-twister-expander-content-size_name`) so Run rematches Size, not Color.
+12. **Edit saved recipe:** Popup **Edit** (or Run → **Edit recipe**) rematches `groups[]` and enables picking — same click-to-add behavior as Start picking (lists auto-detect). Drop columns with × (last column removes that table). **Update recipe** overwrites the same `recipe.id` (keeps name/`createdAt`); still no row snapshots.
 
 ## How to verify
 
