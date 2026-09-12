@@ -224,4 +224,83 @@ describe("selectors", () => {
       assert.equal(labels[i], expected[i], `row ${i} should be ${expected[i]}`);
     }
   });
+
+  it("findListContext maps Top highlights heading to product-fact rows, not About this item bullets", () => {
+    const html = loadFixture("top-highlights.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const heading = [...document.querySelectorAll("[role='heading']")].find(
+      (h) => h.textContent.trim() === "Top highlights"
+    );
+    assert.ok(heading);
+
+    const ctx = CS.selectors.findListContext(heading);
+    assert.equal(ctx.items.length, 4);
+    assert.ok(ctx.items.every((item) => item.classList.contains("product-facts-detail")));
+    const texts = ctx.items.map((item) => item.textContent.replace(/\s+/g, " ").trim());
+    assert.ok(texts.some((t) => t.includes("100% Cotton")));
+    assert.ok(!texts.some((t) => t.includes("Lay-flat collar")));
+  });
+
+  it("findListContext maps a Top highlights fact label to the four fact rows", () => {
+    const html = loadFixture("top-highlights.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const fabric = [...document.querySelectorAll(".a-color-base")].find(
+      (el) => el.textContent.trim() === "Fabric type"
+    );
+    const ctx = CS.selectors.findListContext(fabric);
+    assert.equal(ctx.items.length, 4);
+    assert.ok(ctx.items.every((item) => item.classList.contains("product-facts-detail")));
+    assert.ok(
+      ctx.items.every((item) => document.getElementById("topHighlight").contains(item)),
+      "must not select page-wide .celwidget siblings"
+    );
+  });
+
+  it("findListContext on the product title does not steal Top highlights facts", () => {
+    const html = loadFixture("top-highlights.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const title = [...document.querySelectorAll("h1, h1 span")].find((el) =>
+      el.textContent.trim().includes("Gildan T-Shirt")
+    );
+    const ctx = CS.selectors.findListContext(title);
+    const allFacts =
+      ctx.items.length >= 2 && ctx.items.every((item) => item.classList?.contains("product-facts-detail"));
+    assert.equal(allFacts, false, "title click must not retrieve Top highlights rows");
+  });
+
+  it("findListContext on About this item still maps to bullets when Top highlights is present", () => {
+    const html = loadFixture("top-highlights.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const about = [...document.querySelectorAll("h3")].find((h) => h.textContent.trim() === "About this item");
+    const ctx = CS.selectors.findListContext(about);
+    assert.ok(ctx.items.every((item) => item.tagName === "LI"));
+    assert.ok(ctx.items.some((item) => item.textContent.includes("Lay-flat collar")));
+    assert.ok(!ctx.items.some((item) => item.classList.contains("product-facts-detail")));
+  });
+
+  it("findListContext keeps pack-count and size swatches as separate lists", () => {
+    const html = loadFixture("twister-dimensions.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    const small = [...document.querySelectorAll(".swatch-title-text-display")].find(
+      (el) => el.textContent.trim() === "Small"
+    );
+    const pack = [...document.querySelectorAll(".swatch-title-text-display")].find(
+      (el) => el.textContent.trim() === "6"
+    );
+    const sizeCtx = CS.selectors.findListContext(small);
+    const packCtx = CS.selectors.findListContext(pack);
+    const sizeTexts = sizeCtx.items.map((item) => item.textContent.replace(/\s+/g, " ").trim());
+    const packTexts = packCtx.items.map((item) => item.textContent.replace(/\s+/g, " ").trim());
+    assert.equal(sizeCtx.items.length, 5);
+    assert.ok(sizeTexts.includes("Small") && sizeTexts.includes("XX-Large"));
+    assert.ok(!sizeTexts.some((t) => t === "12" || t === "6"));
+    assert.equal(packCtx.items.length, 4);
+    assert.ok(packTexts.some((t) => t === "5") && packTexts.some((t) => t === "12"));
+    assert.ok(!packTexts.some((t) => t.includes("Small") || t.includes("Medium")));
+  });
 });

@@ -169,6 +169,41 @@
     selectedByField.clear();
   }
 
+  /** True when every new peer sits inside some current live item (nested list). */
+  function listNestedInLiveItems(items) {
+    if (!state.liveItems?.length || !items?.length) return false;
+    return items.every((ni) =>
+      state.liveItems.some((live) => live === ni || live.contains?.(ni))
+    );
+  }
+
+  /** Append a sibling list's items into the live session without clearing columns. */
+  function appendListItems(items) {
+    const seen = new Set(state.liveItems);
+    for (const ni of items || []) {
+      if (!(ni?.nodeType === 1) || seen.has(ni)) continue;
+      state.liveItems.push(ni);
+      seen.add(ni);
+    }
+  }
+
+  /** Replace the current list. Used for nested lists under a greedy first pick. */
+  function adoptListContext(ctx) {
+    for (const field of state.fields) {
+      clearFieldOutlines(field.name, field.relativeSelector);
+    }
+    clearSelectedMarks();
+    clearRetrievedItems();
+    state.fields = [];
+    state.columnOrder = [];
+    state.hiddenColumns = [];
+    state.rows = [];
+    resetListSession();
+    state.rootSelector = ctx.rootSelector || "";
+    state.itemSelector = ctx.itemSelector || "*";
+    state.liveItems = (ctx.items || []).filter((n) => n?.nodeType === 1);
+  }
+
   function clearSelectedMarks() {
     selectedByField.clear();
     document.querySelectorAll(".click-scrape-selected").forEach((node) => {
@@ -184,34 +219,30 @@
     const el = state.hoverEl || e.target;
     if (!(el instanceof Element) || isOverlay(el) || !el.isConnected) return;
 
-    const nameInput = document.getElementById("cs-field-name");
-    const name = (nameInput?.value || "").trim() || `Field ${state.fields.length + 1}`;
-
     const ctx = NS.selectors.findListContext(el);
-    if (!state.rootSelector) {
+    // Nested disjoint lists replace (title → .celwidget, then About this item → <li>).
+    // Sibling disjoint lists append (pack-count then Size) so both stay in the preview.
+    const disjointList =
+      state.rootSelector &&
+      ctx.items?.length >= 2 &&
+      disjointItems(state.liveItems, ctx.items);
+
+    if (disjointList) {
+      if (listNestedInLiveItems(ctx.items)) {
+        adoptListContext(ctx);
+      } else {
+        appendListItems(ctx.items);
+      }
+    } else if (!state.rootSelector) {
       state.rootSelector = ctx.rootSelector;
       state.itemSelector = ctx.itemSelector;
       state.liveItems = (ctx.items || []).filter((n) => n?.nodeType === 1);
     }
 
-    let item = itemContaining(state.liveItems, el);
-    // Multi-list merge skew fix: don't merge disjoint lists into the same recipe.
-    // When clicking a disjoint list, treat it as a field pick within the current list if possible,
-    // but don't merge new list items into liveItems (which would create preview/save skew).
-    if (!item && ctx.items?.length >= 2 && disjointItems(state.liveItems, ctx.items)) {
-      // Disjoint list detected. Don't merge items.
-      // Attempt to find or use the clicked element's own list context.
-      item = ctx.items.find((i) => i === el || i.contains?.(el)) || null;
-      if (!item && state.fields.length) {
-        // Can't place this click in either list; mark it on the last field.
-        const attach = state.fields[state.fields.length - 1]?.name;
-        if (attach) markFieldSelected(attach, el);
-        else el.classList.add("click-scrape-selected");
-        refreshUi();
-        return;
-      }
-    }
+    const nameInput = document.getElementById("cs-field-name");
+    const name = (nameInput?.value || "").trim() || `Field ${state.fields.length + 1}`;
 
+    let item = itemContaining(state.liveItems, el);
     item = item || ctx.items.find((i) => i === el || i.contains(el)) || el;
     if (!state.sampleItem) state.sampleItem = item;
 

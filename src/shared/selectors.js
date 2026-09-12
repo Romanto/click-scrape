@@ -141,6 +141,61 @@
     return score;
   }
 
+  function isHeadingNode(el) {
+    if (!(el instanceof Element)) return false;
+    if (/^H[1-6]$/.test(el.tagName)) return true;
+    return el.getAttribute("role") === "heading";
+  }
+
+  function closestHeading(element) {
+    if (!element?.closest) return null;
+    let el = element;
+    for (let d = 0; d < 10 && el; d += 1) {
+      if (isHeadingNode(el)) return el;
+      el = el.parentElement;
+    }
+    return element.closest("h1, h2, h3, h4, h5, h6");
+  }
+
+  function factRowsUnder(parent) {
+    if (!parent) return [];
+    const items = [];
+    for (let c = parent.firstElementChild; c; c = c.nextElementSibling) {
+      if (c.classList?.contains("product-facts-detail")) items.push(c);
+    }
+    return items;
+  }
+
+  /** Amazon Top highlights: label/value rows, not ul/li. */
+  function factRowGroupElements(element) {
+    if (!element?.closest) return [];
+    const row = element.closest(".product-facts-detail");
+    if (row?.parentElement) {
+      const items = factRowsUnder(row.parentElement);
+      if (items.length >= 2) return items;
+    }
+
+    const heading = closestHeading(element);
+    if (!(heading && (heading === element || heading.contains(element)))) return [];
+    const label = heading.textContent.replace(/\s+/g, " ").trim();
+    if (!/^top highlights$/i.test(label)) return [];
+
+    // Only the expander next to this heading — never querySelector("#topHighlight")
+    // from #centerCol, which would steal every other pick on the page.
+    let node = heading;
+    for (let d = 0; d < 6 && node; d += 1) {
+      const parent = node.parentElement;
+      if (!parent) break;
+      for (let c = parent.firstElementChild; c; c = c.nextElementSibling) {
+        if (c.id !== "topHighlight") continue;
+        const items = factRowsUnder(c.querySelector('[role="list"]'));
+        if (items.length >= 2) return items;
+      }
+      node = parent;
+    }
+    return [];
+  }
+
   /**
    * Narrow "similar" to a subtree so site-wide classes (e.g. Amazon `.a-list-item`)
    * only count peers in the same list region.
@@ -156,8 +211,11 @@
     );
     if (byId) return byId;
 
-    // Heading beside a list (Amazon "Ask Alexa"): scope to that widget, not #centerCol.
-    const heading = element.closest?.("h1, h2, h3, h4, h5, h6");
+    const facts = factRowGroupElements(element);
+    if (facts.length >= 2) return facts[0].parentElement;
+
+    // Heading beside a list (Amazon "Ask Alexa" / "Top highlights"): scope to that widget, not #centerCol.
+    const heading = closestHeading(element);
     const fromHeading = heading && (heading === element || heading.contains(element)) ? heading : null;
     if (fromHeading) {
       let host = fromHeading.parentElement;
@@ -325,10 +383,12 @@
   function computeAdjacentListGroupElements(element) {
     const nested = computeSiblingListGroupElements(element);
     if (nested.length >= 2) return nested;
+    const facts = factRowGroupElements(element);
+    if (facts.length >= 2) return facts;
     if (!element?.closest) return [];
     const scopeRoot = getSimilarScopeRoot(element);
     if (!scopeRoot || !scopeRoot.contains(element)) return [];
-    const heading = element.closest("h1, h2, h3, h4, h5, h6");
+    const heading = closestHeading(element);
     if (!heading || !scopeRoot.contains(heading)) return [];
     let n = heading.nextElementSibling;
     while (n && (n === scopeRoot || scopeRoot.contains(n))) {
@@ -354,7 +414,7 @@
    */
   function findSimilarPeers(element) {
     if (!(element instanceof Element)) return [];
-    const heading = element.closest?.("h1, h2, h3, h4, h5, h6");
+    const heading = closestHeading(element);
     const onListHeading = !!(heading && (heading === element || heading.contains(element)));
     if (!onListHeading) {
       const picked = pickPeerSelector(element);
