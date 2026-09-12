@@ -233,7 +233,7 @@
   list-style: none !important;
   margin: 0 !important;
   padding: 0 !important;
-  max-height: 88px !important;
+  max-height: 140px !important;
   overflow: auto !important;
 }
 
@@ -247,6 +247,7 @@
   display: flex !important;
   align-items: center !important;
   gap: 6px !important;
+  flex-wrap: wrap !important;
 }
 
 #click-scrape-overlay .cs-field-name {
@@ -258,14 +259,45 @@
   white-space: nowrap !important;
 }
 
-#click-scrape-overlay .cs-field-sel {
-  display: block !important;
+#click-scrape-overlay .cs-field-adjust {
+  display: inline-flex !important;
+  gap: 4px !important;
+  flex-shrink: 0 !important;
+}
+
+#click-scrape-overlay .cs-field-adjust .cs-col-btn {
   font-size: 10px !important;
+  padding: 2px 6px !important;
+  border: 1px solid #E5E7EB !important;
+  border-radius: 6px !important;
+  background: #fff !important;
+  color: #2D2A4A !important;
+  box-shadow: none !important;
+}
+
+#click-scrape-overlay .cs-field-adjust .cs-col-btn:hover:not(:disabled) {
+  border-color: #9D58E3 !important;
+  color: #9D58E3 !important;
+  background: #F8F4FF !important;
+}
+
+#click-scrape-overlay .cs-field-sample {
+  display: block !important;
+  font-size: 11px !important;
   color: #6B7280 !important;
   overflow: hidden !important;
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
-  margin-top: 3px !important;
+  margin-top: 4px !important;
+}
+
+#click-scrape-overlay .cs-field-sample-empty {
+  font-style: italic !important;
+  color: #9CA3AF !important;
+}
+
+#click-scrape-overlay .cs-field-sel {
+  display: none !important;
 }
 
 #click-scrape-overlay .cs-th {

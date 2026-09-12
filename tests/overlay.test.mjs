@@ -141,16 +141,57 @@ describe("overlay preview", () => {
     assert.ok(document.querySelector('[data-cs-col="Price"]'));
   });
 
-  it("shows field names primary and selectors secondary", () => {
+  it("shows field names with Broader/Narrower and hides raw selectors", () => {
     overlay.renderFields([
-      { name: "Title", relativeSelector: ":scope > .title" },
-      { name: "Price", relativeSelector: ":scope .price" },
+      {
+        name: "Title",
+        relativeSelector: ":scope > .title",
+        sample: "Acme Notebook",
+        canBroader: true,
+        canNarrower: false,
+      },
+      {
+        name: "Price",
+        relativeSelector: ":scope .price",
+        sample: "$12.00",
+        canBroader: false,
+        canNarrower: true,
+      },
     ]);
     const items = [...document.querySelectorAll("#cs-fields .cs-field")];
     assert.equal(items.length, 2);
     assert.equal(items[0].querySelector(".cs-field-name").textContent, "Title");
-    assert.equal(items[0].querySelector(".cs-field-sel").textContent, ":scope > .title");
+    assert.equal(items[0].querySelector(".cs-field-sample").textContent, "Acme Notebook");
+    assert.equal(items[0].querySelector(".cs-field-sel").hidden, true);
     assert.ok(items[0].querySelector('[data-cs-drop="Title"]'));
+    const broader = items[0].querySelector('[data-cs-adjust="Title"][data-cs-dir="-1"]');
+    const narrower = items[0].querySelector('[data-cs-adjust="Title"][data-cs-dir="1"]');
+    assert.ok(broader && !broader.disabled);
+    assert.ok(narrower && narrower.disabled);
+  });
+
+  it("Broader/Narrower fire onAdjustField", () => {
+    const calls = [];
+    overlay.setColumnHandlers({
+      onAdjustField(name, dir, groupIndex) {
+        calls.push([name, dir, groupIndex]);
+      },
+    });
+    overlay.renderFields([
+      {
+        name: "Title",
+        relativeSelector: ":scope .title",
+        canBroader: true,
+        canNarrower: true,
+        groupIndex: 0,
+      },
+    ]);
+    click(document.querySelector('[data-cs-adjust="Title"][data-cs-dir="-1"]'));
+    click(document.querySelector('[data-cs-adjust="Title"][data-cs-dir="1"]'));
+    assert.deepEqual(calls, [
+      ["Title", -1, 0],
+      ["Title", 1, 0],
+    ]);
   });
 
   it("renderPreview options.tables draws separate tables from row 1", () => {

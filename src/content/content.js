@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "edit-ux-v4";
+  const BOOT = "nesting-v1";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -368,13 +368,49 @@
       .filter((t) => t.columns.length);
   }
 
+  function resolveGroupItem(group) {
+    if (!group) return null;
+    if (group.sampleItem?.isConnected) return group.sampleItem;
+    const live = (group.liveItems || []).find((n) => n?.isConnected);
+    if (live) return live;
+    return outlineItemsForGroup(group)[0] || null;
+  }
+
+  function fieldAdjustMeta(group, field) {
+    const item = resolveGroupItem(group);
+    if (!item || !field?.relativeSelector) {
+      return { sample: "", canBroader: false, canNarrower: false };
+    }
+    let el = null;
+    try {
+      el = NS.extract.queryField?.(item, field.relativeSelector);
+    } catch {
+      el = null;
+    }
+    if (!(el instanceof Element)) {
+      return { sample: "", canBroader: false, canNarrower: false };
+    }
+    const info = NS.selectors.fieldTargetStepInfo?.(item, el) || {};
+    const sample = String(el.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 56);
+    return {
+      sample,
+      canBroader: !!info.canBroader,
+      canNarrower: !!info.canNarrower,
+    };
+  }
+
   function visibleFieldList() {
     const out = [];
     state.groups.forEach((group, groupIndex) => {
       const byName = new Map(group.fields.map((f) => [f.name, f]));
       for (const n of groupColumns(group)) {
         const field = byName.get(n);
-        if (field) out.push({ ...field, groupIndex });
+        if (!field) continue;
+        const meta = fieldAdjustMeta(group, field);
+        out.push({ ...field, groupIndex, ...meta });
       }
     });
     return out;
@@ -456,6 +492,47 @@
     applyColumnView();
   }
 
+  function onAdjustField(name, dir, groupIndex) {
+    if (state.walking) return;
+    const gi = findGroupIndexForFieldName(name, groupIndex);
+    if (gi < 0) return;
+    const group = state.groups[gi];
+    const field = group.fields.find((f) => f.name === name);
+    if (!field) return;
+    const item = resolveGroupItem(group);
+    if (!item) return;
+    let current = null;
+    try {
+      current = NS.extract.queryField?.(item, field.relativeSelector);
+    } catch {
+      current = null;
+    }
+    if (!(current instanceof Element)) return;
+    const next = NS.selectors.stepFieldTarget?.(item, current, dir);
+    if (!(next instanceof Element) || next === current) return;
+
+    const oldRel = field.relativeSelector;
+    clearFieldOutlines(gi, name, oldRel);
+    field.relativeSelector = NS.selectors.relativeSelector(item, next);
+    if (!group.sampleItem?.isConnected) group.sampleItem = item;
+    markFieldSelected(gi, name, next);
+
+    if (group.rowsDirty) {
+      mergeFieldIntoDirtyGroup(group, name);
+      highlightRetrievedItems(
+        state.groups.flatMap((g) => (g.fields.length ? outlineItemsForGroup(g) : []))
+      );
+      applyColumnView();
+    } else {
+      refreshUi();
+    }
+    setHint(
+      dir < 0
+        ? `Broader — “${name}” now covers a larger area. Narrower to tighten.`
+        : `Narrower — “${name}” now targets a smaller area. Broader to expand.`
+    );
+  }
+
   function remapSelectedAfterGroupRemoved(removedIndex) {
     const nextMap = new Map();
     selectedByField.forEach((set, key) => {
@@ -503,7 +580,7 @@
       syncSessionChrome();
       return;
     }
-    NS.overlay.setColumnHandlers({ onRename, onDrop, onMove });
+    NS.overlay.setColumnHandlers({ onRename, onDrop, onMove, onAdjustField });
     NS.overlay.setRowHandlers?.({
       onEditCell,
       onAddRow,

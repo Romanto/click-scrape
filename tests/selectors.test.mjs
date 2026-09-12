@@ -351,4 +351,48 @@ describe("selectors", () => {
     assert.equal(sizes.join("|"), "Small|Medium|Large|X-Large|XX-Large");
     assert.ok(!sizes.includes("Red") && !sizes.includes("Blue"));
   });
+
+  it("stepFieldTarget broadens from title span toward the card item", () => {
+    const titleEl = doc.querySelector("article.product .title");
+    const ctx = ClickScrape.selectors.findListContext(titleEl);
+    const item = ctx.items.find((i) => i.contains(titleEl));
+    assert.ok(item);
+
+    const broader = ClickScrape.selectors.stepFieldTarget(item, titleEl, "broader");
+    assert.ok(broader);
+    assert.equal(broader, titleEl.parentElement);
+    assert.ok(item.contains(broader) || broader === item);
+
+    const info = ClickScrape.selectors.fieldTargetStepInfo(item, titleEl);
+    assert.equal(info.canBroader, true);
+    assert.equal(info.canNarrower, false, "title span is a leaf");
+  });
+
+  it("stepFieldTarget narrows from title-wrap into the title span", () => {
+    const wrap = doc.querySelector("article.product .title-wrap");
+    const titleEl = doc.querySelector("article.product .title");
+    const ctx = ClickScrape.selectors.findListContext(wrap);
+    const item = ctx.items.find((i) => i.contains(wrap));
+    assert.ok(item && titleEl);
+
+    const narrower = ClickScrape.selectors.stepFieldTarget(item, wrap, "narrower");
+    assert.equal(narrower, titleEl);
+
+    const atItem = ClickScrape.selectors.stepFieldTarget(item, item, "broader");
+    assert.equal(atItem, null, "cannot broaden past the list item");
+
+    const info = ClickScrape.selectors.fieldTargetStepInfo(item, item);
+    assert.equal(info.canBroader, false);
+    assert.equal(info.canNarrower, true);
+  });
+
+  it("relativeSelector stays item-relative after a broader step", () => {
+    const titleEl = doc.querySelector("article.product .title");
+    const ctx = ClickScrape.selectors.findListContext(titleEl);
+    const item = ctx.items.find((i) => i.contains(titleEl));
+    const broader = ClickScrape.selectors.stepFieldTarget(item, titleEl, -1);
+    const rel = ClickScrape.selectors.relativeSelector(item, broader);
+    assertItemRelative(rel);
+    assert.equal(resolveRelative(item, rel), broader);
+  });
 });

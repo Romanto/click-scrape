@@ -116,6 +116,17 @@
         return;
       }
 
+      const adjust = t.closest("[data-cs-adjust]");
+      if (adjust && el.contains(adjust) && !adjust.disabled) {
+        e.preventDefault();
+        const name = adjust.getAttribute("data-cs-adjust");
+        const dir = Number(adjust.getAttribute("data-cs-dir"));
+        if (name && (dir === -1 || dir === 1)) {
+          callHandler(columnHandlers, "onAdjustField", name, dir, parseGroup(adjust));
+        }
+        return;
+      }
+
       const move = t.closest("[data-cs-move]");
       if (move && el.contains(move) && !move.disabled) {
         e.preventDefault();
@@ -209,14 +220,25 @@
       .map((f) => {
         const name = f?.name ?? "";
         const sel = f?.relativeSelector ?? "";
+        const sample = String(f?.sample ?? "").trim();
         const gi = f?.groupIndex;
         const groupAttr = gi == null ? "" : ` data-cs-group="${escapeHtml(String(gi))}"`;
+        const broadOff = f?.canBroader ? "" : " disabled";
+        const narrowOff = f?.canNarrower ? "" : " disabled";
+        const sampleHtml = sample
+          ? `<span class="cs-field-sample" title="${escapeHtml(sample)}">${escapeHtml(sample)}</span>`
+          : `<span class="cs-field-sample cs-field-sample-empty">No text at this level</span>`;
         return `<li class="cs-field">
           <div class="cs-field-main">
             <strong class="cs-field-name">${escapeHtml(name)}</strong>
+            <span class="cs-field-adjust">
+              <button type="button" class="cs-col-btn" data-cs-adjust="${escapeHtml(name)}" data-cs-dir="-1"${groupAttr} title="Broader — select a larger area"${broadOff}>Broader</button>
+              <button type="button" class="cs-col-btn" data-cs-adjust="${escapeHtml(name)}" data-cs-dir="1"${groupAttr} title="Narrower — select a smaller area"${narrowOff}>Narrower</button>
+            </span>
             <button type="button" class="cs-col-btn cs-col-drop" data-cs-drop="${escapeHtml(name)}"${groupAttr} title="Remove column">×</button>
           </div>
-          <code class="cs-field-sel" title="${escapeHtml(sel)}">${escapeHtml(sel)}</code>
+          ${sampleHtml}
+          <code class="cs-field-sel" hidden title="${escapeHtml(sel)}">${escapeHtml(sel)}</code>
         </li>`;
       })
       .join("");

@@ -368,4 +368,31 @@ describe("outline cleanup", () => {
     const after = [...document.querySelectorAll("td.cs-cell")].map((el) => el.textContent);
     assert.ok(after.includes(original) || after.some((v) => v && v !== "manual-edit"));
   });
+
+  it("Broader then Narrower adjusts nesting and updates the sample", () => {
+    const html = loadFixture("nested-cards.html");
+    const { document, startPicker, pick, fire } = loadPicker(html);
+
+    startPicker();
+    pick(document.querySelector("article.product .title"));
+    const sample = document.querySelector(".cs-field-sample");
+    assert.ok(sample?.textContent.includes("Acme Notebook"));
+
+    const broader = document.querySelector('[data-cs-adjust][data-cs-dir="-1"]');
+    assert.ok(broader && !broader.disabled, "Broader enabled on leaf title");
+    fire(broader, "click");
+
+    const narrower = document.querySelector('[data-cs-adjust][data-cs-dir="1"]');
+    assert.ok(narrower && !narrower.disabled, "Narrower enabled after Broader");
+    fire(narrower, "click");
+
+    assert.ok(
+      document.querySelector(".cs-field-sample")?.textContent.includes("Acme Notebook"),
+      "sample still shows title text after round-trip"
+    );
+    assert.ok(
+      document.getElementById("cs-preview").textContent.includes("Acme Notebook"),
+      "preview still has title rows"
+    );
+  });
 });
