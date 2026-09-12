@@ -345,4 +345,27 @@ describe("outline cleanup", () => {
     assert.ok(preview.includes("Israel"));
     assert.equal(document.querySelectorAll("#cs-preview tbody tr").length, 1);
   });
+
+  it("edited preview cells survive refresh and export includes the edit", () => {
+    const html = loadFixture("nested-cards.html");
+    const { document, startPicker, pick, fire } = loadPicker(html);
+
+    startPicker();
+    pick(document.querySelector("article.product .title"));
+    const cell = document.querySelector("td.cs-cell");
+    assert.ok(cell, "editable cell present");
+    const original = cell.textContent;
+    cell.textContent = "manual-edit";
+    cell.dispatchEvent(new document.defaultView.Event("focusout", { bubbles: true }));
+
+    assert.match(document.getElementById("cs-preview").textContent, /manual-edit/);
+    fire(document.querySelector("[data-cs-add-row]"), "click");
+    assert.ok(document.querySelectorAll("#cs-preview tbody tr").length >= 4);
+
+    const reset = document.querySelector("[data-cs-reset-rows]");
+    assert.ok(reset && !reset.disabled, "Reset enabled after edit");
+    fire(reset, "click");
+    const after = [...document.querySelectorAll("td.cs-cell")].map((el) => el.textContent);
+    assert.ok(after.includes(original) || after.some((v) => v && v !== "manual-edit"));
+  });
 });

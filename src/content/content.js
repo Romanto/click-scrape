@@ -6,7 +6,7 @@
 
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
 
-  /** @typedef {{ rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[] }} ListGroup */
+  /** @typedef {{ rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
 
   let state = {
     active: false,
@@ -66,6 +66,7 @@
       rows: [],
       columnOrder: [],
       hiddenColumns: [],
+      rowsDirty: false,
     };
   }
 
@@ -315,7 +316,15 @@
       name;
     markFieldSelected(groupIndex, fieldName, el);
     if (nameInput) nameInput.value = "";
-    refreshUi();
+    if (group.rowsDirty) {
+      mergeFieldIntoDirtyGroup(group, fieldName);
+      highlightRetrievedItems(
+        state.groups.flatMap((g) => (g.fields.length ? outlineItemsForGroup(g) : []))
+      );
+      applyColumnView();
+    } else {
+      refreshUi();
+    }
   }
 
   function onKeyDown(e) {
@@ -343,6 +352,7 @@
         groupIndex,
         columns: groupColumns(group),
         rows: Array.isArray(group.rows) ? group.rows : [],
+        rowsDirty: !!group.rowsDirty,
       }))
       .filter((t) => t.columns.length);
   }
@@ -410,6 +420,7 @@
     group.fields = updated.fields;
     group.columnOrder = updated.columnOrder;
     group.hiddenColumns = updated.hiddenColumns;
+    if (NS.rows?.stripColumn) group.rows = NS.rows.stripColumn(group.rows, name);
     if (field) clearFieldOutlines(gi, field.name, field.relativeSelector);
     if (!group.fields.length) {
       state.groups.splice(gi, 1);
@@ -431,7 +442,8 @@
       refreshUi();
       return;
     }
-    refreshUi();
+    if (group.rowsDirty) applyColumnView();
+    else refreshUi();
   }
 
   function onMove(name, dir, groupIndex) {
@@ -444,7 +456,75 @@
   }
 
   function bindColumnHandlers() {
-    NS.overlay.setColumnHandlers(state.walking ? {} : { onRename, onDrop, onMove });
+    if (state.walking) {
+      NS.overlay.setColumnHandlers({});
+      NS.overlay.setRowHandlers?.({});
+      return;
+    }
+    NS.overlay.setColumnHandlers({ onRename, onDrop, onMove });
+    NS.overlay.setRowHandlers?.({ onEditCell, onAddRow, onDeleteRow, onResetRows });
+  }
+
+  function anyRowsDirty() {
+    return state.groups.some((g) => g.rowsDirty);
+  }
+
+  function onEditCell(groupIndex, rowIndex, column, value) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group || !column) return;
+    const prev = group.rows?.[rowIndex]?.[column];
+    const nextVal = String(value ?? "");
+    if (prev === nextVal && group.rowsDirty) return;
+    group.rows = NS.rows.updateCell(group.rows, rowIndex, column, nextVal);
+    group.rowsDirty = true;
+    // Keep caret / focus — do not rebuild the whole table on every cell blur.
+    NS.overlay.markTableDirty?.(groupIndex, true);
+  }
+
+  function onAddRow(groupIndex) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group) return;
+    group.rows = NS.rows.addRow(group.rows, groupColumns(group));
+    group.rowsDirty = true;
+    applyColumnView();
+  }
+
+  function onDeleteRow(groupIndex, rowIndex) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group) return;
+    group.rows = NS.rows.removeRow(group.rows, rowIndex);
+    group.rowsDirty = true;
+    applyColumnView();
+  }
+
+  function onResetRows(groupIndex) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group) return;
+    group.rowsDirty = false;
+    const outlined = refreshGroupRows(group);
+    highlightRetrievedItems(
+      state.groups.flatMap((g, i) => {
+        if (!g.fields.length) return [];
+        if (i === groupIndex) return outlined;
+        return outlineItemsForGroup(g);
+      })
+    );
+    applyColumnView();
+    setHint("Table reset from the page.");
+  }
+
+  function mergeFieldIntoDirtyGroup(group, fieldName) {
+    if (!group || !fieldName) return;
+    const live = (group.liveItems || []).filter((n) => n?.isConnected);
+    const items = live.length ? live : outlineItemsForGroup(group);
+    if (items.length) group.liveItems = items.filter((n) => n?.nodeType === 1);
+    const scraped =
+      NS.extract.retrieveRowsFromItems?.(group.liveItems, group.fields) || [];
+    group.rows = NS.rows.mergeColumn(group.rows, fieldName, scraped);
   }
 
   function setHint(text) {
@@ -460,6 +540,9 @@
   }
 
   function refreshGroupRows(group) {
+    if (group.rowsDirty) {
+      return outlineItemsForGroup(group);
+    }
     const live = (group.liveItems || []).filter((n) => n?.isConnected);
     if (live.length) {
       group.rows = NS.extract.retrieveRowsFromItems?.(live, group.fields) || [];
@@ -511,6 +594,10 @@
 
   async function onWalkPages() {
     if (state.walking) return;
+    if (anyRowsDirty()) {
+      setHint("Reset edited tables from the page before walking, or Export first.");
+      return;
+    }
     const group = primaryGroup();
     const recipe = currentRecipe();
     if (!group || !recipe.fields.length || !recipe.rootSelector) {

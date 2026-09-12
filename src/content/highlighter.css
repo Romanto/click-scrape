@@ -29,8 +29,8 @@
   z-index: 2147483646 !important;
   right: 16px !important;
   bottom: 16px !important;
-  width: 380px !important;
-  max-height: 70vh !important;
+  width: min(440px, calc(100vw - 24px)) !important;
+  max-height: 78vh !important;
   overflow: auto !important;
   background: #ffffff !important;
   color: #2D2A4A !important;
@@ -128,19 +128,61 @@
 
 #click-scrape-overlay .cs-preview-table {
   margin-top: 10px !important;
+  padding: 10px !important;
+  border: 1px solid #E5E7EB !important;
+  border-radius: 10px !important;
+  background: #FCFCFD !important;
+}
+
+#click-scrape-overlay .cs-preview-table.cs-dirty {
+  border-color: #DDD6FE !important;
+  background: #FCFBFF !important;
 }
 
 #click-scrape-overlay .cs-preview-table + .cs-preview-table {
-  margin-top: 14px !important;
+  margin-top: 12px !important;
   padding-top: 10px !important;
-  border-top: 1px solid #E5E7EB !important;
+}
+
+#click-scrape-overlay .cs-table-toolbar {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  margin: 0 0 8px !important;
+}
+
+#click-scrape-overlay .cs-table-label {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.02em !important;
+  text-transform: uppercase !important;
+  color: #6B7280 !important;
+}
+
+#click-scrape-overlay .cs-dirty-badge {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #7C3AED !important;
+  background: #F3E8FF !important;
+  border: 1px solid #E9D5FF !important;
+  border-radius: 999px !important;
+  padding: 2px 8px !important;
+  line-height: 1.4 !important;
+}
+
+#click-scrape-overlay .cs-table-scroll {
+  overflow-x: auto !important;
+  margin: 0 -2px !important;
+  padding-bottom: 2px !important;
 }
 
 #click-scrape-overlay table {
   width: 100% !important;
   border-collapse: collapse !important;
-  margin-top: 8px !important;
+  margin-top: 0 !important;
   font-size: 11px !important;
+  min-width: 100% !important;
 }
 
 #click-scrape-overlay th,
@@ -148,10 +190,7 @@
   border: 1px solid #E5E7EB !important;
   padding: 6px 8px !important;
   text-align: left !important;
-  max-width: 140px !important;
-  overflow: hidden !important;
-  text-overflow: ellipsis !important;
-  white-space: nowrap !important;
+  max-width: 160px !important;
   color: #2D2A4A !important;
 }
 
@@ -161,6 +200,13 @@
   background: #F8F4FF !important;
   font-weight: 600 !important;
   color: #9D58E3 !important;
+  overflow: hidden !important;
+}
+
+#click-scrape-overlay td:not(.cs-cell):not(.cs-row-actions) {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 #click-scrape-overlay .cs-hint {
@@ -278,4 +324,122 @@
 #click-scrape-overlay button.cs-col-btn:disabled {
   opacity: 0.35 !important;
   cursor: default !important;
+}
+
+#click-scrape-overlay td.cs-cell {
+  min-width: 4.5rem !important;
+  max-width: 180px !important;
+  padding: 5px 7px !important;
+  font-size: 11px !important;
+  line-height: 1.35 !important;
+  border: 1px solid #E5E7EB !important;
+  border-radius: 0 !important;
+  outline: none !important;
+  cursor: text !important;
+  vertical-align: top !important;
+  white-space: pre-wrap !important;
+  overflow-wrap: anywhere !important;
+  word-break: break-word !important;
+  background: #fff !important;
+  transition: background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease !important;
+}
+
+#click-scrape-overlay td.cs-cell:hover {
+  background: #FAF8FF !important;
+}
+
+#click-scrape-overlay td.cs-cell:focus {
+  border-color: #9D58E3 !important;
+  background: #fff !important;
+  box-shadow: inset 0 0 0 1px #9D58E3 !important;
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+#click-scrape-overlay td.cs-cell.cs-cell-empty:not(:focus)::before {
+  content: attr(data-placeholder) !important;
+  color: #9CA3AF !important;
+  pointer-events: none !important;
+}
+
+#click-scrape-overlay tr.cs-data-row:hover td {
+  background: #FAFAFB !important;
+}
+
+#click-scrape-overlay tr.cs-data-row:hover td.cs-cell {
+  background: #FAF8FF !important;
+}
+
+#click-scrape-overlay .cs-row-actions,
+#click-scrape-overlay .cs-row-actions-head {
+  width: 2.25rem !important;
+  min-width: 2.25rem !important;
+  max-width: 2.25rem !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 4px !important;
+  background: #FAFAFB !important;
+}
+
+#click-scrape-overlay .cs-del-row {
+  opacity: 0.35 !important;
+  transition: opacity 0.12s ease !important;
+}
+
+#click-scrape-overlay tr.cs-data-row:hover .cs-del-row,
+#click-scrape-overlay .cs-del-row:focus {
+  opacity: 1 !important;
+}
+
+#click-scrape-overlay .cs-empty-row td {
+  border-style: dashed !important;
+  background: #F9FAFB !important;
+  padding: 14px 10px !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  max-width: none !important;
+}
+
+#click-scrape-overlay .cs-empty-row-msg {
+  display: block !important;
+  text-align: center !important;
+  color: #6B7280 !important;
+  font-size: 11px !important;
+  line-height: 1.4 !important;
+}
+
+#click-scrape-overlay .cs-table-actions {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: center !important;
+  gap: 6px !important;
+  margin-top: 8px !important;
+}
+
+#click-scrape-overlay button.cs-row-btn {
+  padding: 5px 10px !important;
+  font-size: 11px !important;
+  border-radius: 7px !important;
+}
+
+#click-scrape-overlay button.cs-add-row {
+  border-color: #DDD6FE !important;
+  color: #7C3AED !important;
+  background: #F5F3FF !important;
+}
+
+#click-scrape-overlay button.cs-add-row:hover {
+  background: #EDE9FE !important;
+  border-color: #9D58E3 !important;
+  color: #6D28D9 !important;
+}
+
+#click-scrape-overlay button.cs-reset-rows:disabled {
+  opacity: 0.4 !important;
+  cursor: default !important;
+}
+
+#click-scrape-overlay .cs-table-meta {
+  margin: 6px 0 0 !important;
+  font-size: 11px !important;
 }

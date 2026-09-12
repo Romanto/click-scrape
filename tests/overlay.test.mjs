@@ -47,7 +47,9 @@ describe("overlay preview", () => {
       "removeOverlay",
       "escapeHtml",
       "setColumnHandlers",
+      "setRowHandlers",
       "getVisibleColumns",
+      "markTableDirty",
     ]) {
       assert.equal(typeof overlay[name], "function", name);
     }
@@ -86,15 +88,15 @@ describe("overlay preview", () => {
     assert.equal(document.querySelector("#cs-preview .cs-empty").textContent, "Custom empty.");
   });
 
-  it("renders the first 20 rows and a count caption", () => {
-    const rows = Array.from({ length: 25 }, (_, i) => ({ Title: `Row ${i + 1}` }));
+  it("renders the first 200 rows and a count caption", () => {
+    const rows = Array.from({ length: 250 }, (_, i) => ({ Title: `Row ${i + 1}` }));
     overlay.renderPreview(rows, ["Title"]);
     const trs = document.querySelectorAll("#cs-preview tbody tr");
-    assert.equal(trs.length, 20);
+    assert.equal(trs.length, 200);
     const hint = document.querySelector("#cs-preview .cs-hint");
-    assert.equal(hint.textContent, "25 row(s) — showing 20");
-    assert.match(document.querySelector("#cs-preview tbody").textContent, /Row 20/);
-    assert.doesNotMatch(document.querySelector("#cs-preview tbody").textContent, /Row 21/);
+    assert.equal(hint.textContent, "250 rows · showing 200");
+    assert.match(document.querySelector("#cs-preview tbody").textContent, /Row 200/);
+    assert.doesNotMatch(document.querySelector("#cs-preview tbody").textContent, /Row 201/);
   });
 
   it("renders rename, drop, and up/down controls without mutating rows", () => {
@@ -163,5 +165,56 @@ describe("overlay preview", () => {
     assert.ok(!tables[0].textContent.includes("Small"));
     assert.ok(tables[1].textContent.includes("Small"));
     assert.ok(!tables[1].textContent.includes("12"));
+  });
+
+  it("row handlers fire for cell edit, add, and delete", () => {
+    const calls = [];
+    overlay.setRowHandlers({
+      onEditCell(groupIndex, rowIndex, col, value) {
+        calls.push(["edit", groupIndex, rowIndex, col, value]);
+      },
+      onAddRow(groupIndex) {
+        calls.push(["add", groupIndex]);
+      },
+      onDeleteRow(groupIndex, rowIndex) {
+        calls.push(["del", groupIndex, rowIndex]);
+      },
+      onResetRows(groupIndex) {
+        calls.push(["reset", groupIndex]);
+      },
+    });
+    overlay.renderPreview([], [], {
+      tables: [
+        {
+          groupIndex: 0,
+          columns: ["Title"],
+          rows: [{ Title: "A" }, { Title: "B" }],
+          rowsDirty: true,
+        },
+      ],
+    });
+    assert.ok(document.querySelector('td.cs-cell[data-cs-row="0"]'));
+    const cell = document.querySelector('td.cs-cell[data-cs-row="1"][data-cs-col="Title"]');
+    cell.textContent = "edited";
+    cell.dispatchEvent(new document.defaultView.Event("focusout", { bubbles: true }));
+    click(document.querySelector('[data-cs-del-row="0"]'));
+    click(document.querySelector("[data-cs-add-row]"));
+    click(document.querySelector("[data-cs-reset-rows]"));
+    assert.deepEqual(calls, [
+      ["edit", 0, 1, "Title", "edited"],
+      ["del", 0, 0],
+      ["add", 0],
+      ["reset", 0],
+    ]);
+  });
+
+  it("shows an empty editable table with Add row when row handlers are set", () => {
+    overlay.setRowHandlers({
+      onAddRow() {},
+    });
+    overlay.renderPreview([], ["Title"]);
+    assert.equal(document.querySelector("#cs-preview .cs-empty"), null);
+    assert.ok(document.querySelector("#cs-preview table"));
+    assert.ok(document.querySelector("[data-cs-add-row]"));
   });
 });

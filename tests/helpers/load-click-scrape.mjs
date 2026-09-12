@@ -7,7 +7,15 @@ import { parseHTML } from "linkedom";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT_DIR = path.join(__dirname, "..", "..");
 const SRC_DIR = path.join(ROOT_DIR, "src", "shared");
-const MODULES = ["selectors.js", "extract.js", "export.js", "pagination.js", "columns.js", "storage.js"];
+const MODULES = [
+  "selectors.js",
+  "extract.js",
+  "export.js",
+  "pagination.js",
+  "columns.js",
+  "rows.js",
+  "storage.js",
+];
 const PICKER_FILES = [
   "src/shared/selectors.js",
   "src/shared/extract.js",
@@ -15,6 +23,7 @@ const PICKER_FILES = [
   "src/shared/storage.js",
   "src/shared/pagination.js",
   "src/shared/columns.js",
+  "src/shared/rows.js",
   "src/content/picker-overlay.js",
   "src/content/content.js",
 ];

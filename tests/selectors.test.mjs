@@ -327,4 +327,28 @@ describe("selectors", () => {
     assert.equal(rows[0].Price, "20");
     assert.equal(rows[0]["Discount%"], "-9%");
   });
+
+  it("cssPath skips duplicate Amazon ids so Size recipes rematch Size not Color", () => {
+    const html = loadFixture("twister-duplicate-ids.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    assert.equal(document.querySelectorAll("#tp-inline-twister-dim-values-container").length, 2);
+    const small = document.querySelector("#size_name_0-announce");
+    const ctx = CS.selectors.findListContext(small);
+    assert.match(ctx.rootSelector, /inline-twister-expander-content-size_name/);
+    assert.doesNotMatch(
+      ctx.rootSelector,
+      /^div#tp-inline-twister-dim-values-container\b/,
+      "must not stop at duplicated twister container id"
+    );
+    const item = ctx.items.find((i) => i === small || i.contains(small));
+    const recipe = {
+      rootSelector: ctx.rootSelector,
+      itemSelector: ctx.itemSelector,
+      fields: [{ name: "Size", relativeSelector: CS.selectors.relativeSelector(item, small) }],
+    };
+    const sizes = CS.extract.retrieve(recipe).rows.map((r) => String(r.Size || "").replace(/\s+/g, " ").trim());
+    assert.equal(sizes.join("|"), "Small|Medium|Large|X-Large|XX-Large");
+    assert.ok(!sizes.includes("Red") && !sizes.includes("Blue"));
+  });
 });

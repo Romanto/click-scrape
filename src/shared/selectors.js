@@ -52,16 +52,34 @@
     return part;
   }
 
+  function idSelector(el) {
+    if (!el?.id) return null;
+    return `${el.tagName.toLowerCase()}#${CSS.escape(el.id)}`;
+  }
+
+  /** True when this id selects exactly one node in the document (Amazon reuses ids). */
+  function isUniqueId(el) {
+    if (!el?.id) return false;
+    const sel = idSelector(el);
+    try {
+      return document.querySelectorAll(sel).length === 1;
+    } catch {
+      return false;
+    }
+  }
+
   function cssPath(el) {
     if (!(el instanceof Element)) return "";
     const parts = [];
     let node = el;
     while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.body && node !== document.documentElement) {
-      if (node.id) {
-        parts.unshift(`${node.tagName.toLowerCase()}#${CSS.escape(node.id)}`);
+      // Amazon reuses ids (e.g. #tp-inline-twister-dim-values-container ×3). Only stop on unique ids
+      // so saved recipes rematch Size under the size expander, not Color/Pack.
+      if (node.id && isUniqueId(node)) {
+        parts.unshift(idSelector(node));
         break;
       }
-      parts.unshift(partFor(node, { allowNth: true }));
+      parts.unshift(partFor(node, { allowNth: true, allowId: false }));
       node = node.parentElement;
     }
     return parts.join(" > ");
@@ -90,7 +108,10 @@
   /** CSS selector for repeating items under a list root (tag + shared classes when possible). */
   function itemSelectorFor(sample, peers) {
     // One-item sessions must not rematch every page-wide .celwidget on Walk/save.
-    if (peers.length === 1 && sample?.id) return `#${CSS.escape(sample.id)}`;
+    // Only use an id when it is unique in the document.
+    if (peers.length === 1 && sample?.id && isUniqueId(sample)) {
+      return `#${CSS.escape(sample.id)}`;
+    }
     const tag = sample.tagName.toLowerCase();
     const shared = sharedClasses(peers.length ? peers : [sample]);
     if (shared.length) return tag + classSuffix(shared);
