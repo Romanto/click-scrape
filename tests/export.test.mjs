@@ -52,4 +52,25 @@ describe("export", () => {
     assert.equal(csv.split("\n")[0], "Price,Title");
     assert.equal(csv.split("\n")[1], "$12.00,Acme Notebook");
   });
+
+  it("toCsvTables joins groups with a blank separator line", () => {
+    const csv = ClickScrape.export.toCsvTables([
+      { columns: ["Pack"], rows: [{ Pack: "5" }, { Pack: "6" }] },
+      { columns: ["Size"], rows: [{ Size: "Small" }, { Size: "Medium" }] },
+    ]);
+    const lines = csv.split("\n");
+    assert.deepEqual(lines, ["Pack", "5", "6", "", "Size", "Small", "Medium"]);
+  });
+
+  it("toJsonTables returns an array of projected tables", () => {
+    const parsed = JSON.parse(
+      ClickScrape.export.toJsonTables([
+        { columns: ["Pack"], rows: [{ Pack: "5", Extra: "x" }] },
+        { columns: ["Size"], rows: [{ Size: "Small" }] },
+      ])
+    );
+    assert.equal(parsed.length, 2);
+    assert.deepEqual(parsed[0], { columns: ["Pack"], rows: [{ Pack: "5" }] });
+    assert.deepEqual(parsed[1], { columns: ["Size"], rows: [{ Size: "Small" }] });
+  });
 });

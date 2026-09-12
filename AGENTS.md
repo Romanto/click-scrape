@@ -77,7 +77,7 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 5. **Pagination:** same-origin next HTML only; dedupe by concatenated visible column values; abort on Stop; no row upload.
 6. **Soft cap:** UX nudge only (never “create an account”); does not block save/walk.
 7. **No** `fetch` of scraped rows/recipes; permissions stay minimal.
-8. **One live list (with sibling append):** `liveItems` is the current repeating group. A **nested** disjoint list under a greedy first pick (title → `.celwidget`, then About this item → `<li>`) **replaces** that session. A **sibling** disjoint list (pack-count then Size) **appends** items so both dimensions stay in the preview. Same-list clicks still add columns.
+8. **List groups (multi-table preview):** each repeating list is a **group** with its own `liveItems` / fields / rows. A **nested** disjoint list under a greedy first pick **replaces** all groups. A **sibling** disjoint list **starts a new group** (own table from row 1). Same-list clicks still add columns to that group. Export concatenates groups with a blank CSV separator (JSON array of tables).
 
 ## How to verify
 

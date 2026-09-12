@@ -154,7 +154,7 @@ describe("outline cleanup", () => {
     assert.ok(!preview.includes("play music"), "dropped Ask Alexa list is not kept after last-column reset");
   });
 
-  it("picking Ask Alexa after About this item appends that list instead of replacing", () => {
+  it("picking Ask Alexa after About this item opens a second table from row 1", () => {
     const html = loadFixture("noisy-bullets.html");
     const { document, startPicker, pick } = loadPicker(html);
 
@@ -164,13 +164,13 @@ describe("outline cleanup", () => {
     assert.ok(about && ask);
 
     pick(about);
-    let preview = document.getElementById("cs-preview").textContent;
-    assert.ok(preview.includes("Bullet one"), "About this item rows retrieved");
-
     pick(ask);
-    preview = document.getElementById("cs-preview").textContent;
-    assert.ok(preview.includes("Bullet one"), "About this item rows kept");
-    assert.ok(preview.includes("play music"), "Ask Alexa rows appended");
+
+    const tables = document.querySelectorAll("#cs-preview .cs-preview-table");
+    assert.equal(tables.length, 2, "sibling lists render as separate tables");
+    assert.ok(tables[0].textContent.includes("Bullet one"));
+    assert.ok(tables[1].textContent.includes("play music"));
+    assert.ok(!tables[1].textContent.includes("Bullet one"), "second table starts fresh at row 1");
   });
 
   it("picking one size swatch retrieves Small through XX-Large", () => {
@@ -281,7 +281,7 @@ describe("outline cleanup", () => {
     );
   });
 
-  it("picking Size after a shorter pack-count list keeps pack rows and adds sizes", () => {
+  it("picking Size after a shorter pack-count list keeps pack in its own table", () => {
     const html = loadFixture("twister-dimensions.html");
     const { document, startPicker, pick } = loadPicker(html);
 
@@ -290,20 +290,18 @@ describe("outline cleanup", () => {
       (el) => el.textContent.trim() === "5"
     );
     pick(pack);
-    let preview = document.getElementById("cs-preview").textContent;
-    assert.ok(preview.includes("5"));
-    assert.ok(preview.includes("12"), "pack-count list retrieved first");
-    assert.ok(!preview.includes("XX-Large"), "sizes are a different list");
-
     const small = [...document.querySelectorAll(".swatch-title-text-display")].find(
       (el) => el.textContent.trim() === "Small"
     );
     pick(small);
-    preview = document.getElementById("cs-preview").textContent;
-    for (const label of ["Small", "Medium", "Large", "X-Large", "XX-Large"]) {
-      assert.ok(preview.includes(label), `${label} row retrieved after picking Size`);
-    }
-    assert.ok(preview.includes("12"), "pack-count values kept after picking Size");
+
+    const tables = [...document.querySelectorAll("#cs-preview .cs-preview-table")];
+    assert.equal(tables.length, 2, "pack and Size each get a table");
+    assert.ok(tables[0].textContent.includes("12"));
+    assert.ok(!tables[0].textContent.includes("XX-Large"), "pack table does not include Size rows");
+    assert.ok(tables[1].textContent.includes("Small"));
+    assert.ok(tables[1].textContent.includes("XX-Large"));
+    assert.ok(!tables[1].textContent.includes("12"), "Size table starts at row 1 without pack values");
     assert.equal(document.querySelectorAll("#inline-twister-row-size_name .click-scrape-item").length, 5);
     assert.equal(document.querySelectorAll("#inline-twister-row-number_of_items .click-scrape-item").length, 4);
   });
