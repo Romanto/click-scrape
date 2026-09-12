@@ -22,20 +22,6 @@ async function injectPicker(tabId) {
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg?.type === "CLICK_SCRAPE_DEBUG_LOG") {
-    const payload = msg.payload || {};
-    fetch("http://127.0.0.1:7509/ingest/6d6969b3-13c1-42c8-8eaf-0bdc9884e441", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Debug-Session-Id": "4676a1",
-      },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-    sendResponse({ ok: true });
-    return false;
-  }
-
   if (msg?.type === "CLICK_SCRAPE_INJECT") {
     (async () => {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -54,33 +40,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     (async () => {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab?.id) throw new Error("No active tab");
-      // #region agent log
-      const recipe = msg.recipe || {};
-      fetch("http://127.0.0.1:7509/ingest/6d6969b3-13c1-42c8-8eaf-0bdc9884e441", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Debug-Session-Id": "4676a1",
-        },
-        body: JSON.stringify({
-          sessionId: "4676a1",
-          runId: "post-fix",
-          hypothesisId: "F",
-          location: "service-worker.js:RUN_ON_TAB",
-          message: "popup run recipe payload",
-          data: {
-            hasGroupsArray: Array.isArray(recipe.groups),
-            groupsLen: Array.isArray(recipe.groups) ? recipe.groups.length : 0,
-            groupFields: Array.isArray(recipe.groups)
-              ? recipe.groups.map((g) => (g.fields || []).map((f) => f.name))
-              : [],
-            legacyFields: (recipe.fields || []).map((f) => f.name),
-            name: recipe.name,
-          },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {});
-      // #endregion
       await injectPicker(tab.id);
       await chrome.tabs.sendMessage(tab.id, { type: "CLICK_SCRAPE_RUN_RECIPE", recipe: msg.recipe });
       sendResponse({ ok: true });

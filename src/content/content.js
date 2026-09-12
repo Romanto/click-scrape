@@ -30,32 +30,6 @@
     return `${groupIndex}::${name}`;
   }
 
-  // #region agent log
-  function debugLog(hypothesisId, location, message, data, runId = "post-fix") {
-    const payload = {
-      sessionId: "4676a1",
-      runId,
-      hypothesisId,
-      location,
-      message,
-      data,
-      timestamp: Date.now(),
-    };
-    fetch("http://127.0.0.1:7509/ingest/6d6969b3-13c1-42c8-8eaf-0bdc9884e441", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "4676a1" },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-    try {
-      chrome.runtime.sendMessage({ type: "CLICK_SCRAPE_DEBUG_LOG", payload }, () => {
-        void chrome.runtime.lastError;
-      });
-    } catch {
-      /* ignore */
-    }
-  }
-  // #endregion
-
   function isOverlay(el) {
     return !!(el && (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")));
   }
@@ -339,22 +313,6 @@
       picked.fields.find((f) => f.relativeSelector === rel)?.name ||
       picked.fields[picked.fields.length - 1]?.name ||
       name;
-    // #region agent log
-    debugLog("B", "content.js:onClick", "field picked into group", {
-      groupIndex,
-      fieldName,
-      rel,
-      groupFieldCount: group.fields.length,
-      groupFieldNames: group.fields.map((f) => f.name),
-      totalGroups: state.groups.length,
-      allGroups: state.groups.map((g, i) => ({
-        i,
-        fields: g.fields.map((f) => f.name),
-        itemSelector: g.itemSelector,
-        liveCount: (g.liveItems || []).length,
-      })),
-    });
-    // #endregion
     markFieldSelected(groupIndex, fieldName, el);
     if (nameInput) nameInput.value = "";
     refreshUi();
@@ -686,23 +644,6 @@
           hiddenColumns: g.hiddenColumns.slice(),
         })),
       };
-      // #region agent log
-      debugLog("A", "content.js:cs-save", "saving recipe with all groups", {
-        totalGroups: state.groups.length,
-        allGroups: state.groups.map((g, i) => ({
-          i,
-          fieldNames: g.fields.map((f) => f.name),
-          itemSelector: g.itemSelector,
-          rootSelector: g.rootSelector,
-        })),
-        savedFieldNames: (recipe.fields || []).map((f) => f.name),
-        savedGroupCount: (recipe.groups || []).length,
-        savedGroupFields: (recipe.groups || []).map((g) => g.fields.map((f) => f.name)),
-        savedItemSelector: recipe.itemSelector,
-        savedRootSelector: recipe.rootSelector,
-        droppedGroupFields: [],
-      });
-      // #endregion
       await NS.storage.saveRecipe(recipe);
       let count = 0;
       try {
@@ -804,22 +745,6 @@
 
     state.groups = built;
     state.walked = false;
-    // #region agent log
-    const sampleRows = built.map((g) => (g.rows && g.rows[0]) || {});
-    debugLog("C", "content.js:runRecipe", "ran saved recipe", {
-      hasGroupsArray: Array.isArray(recipe?.groups),
-      recipeGroupsLen: Array.isArray(recipe?.groups) ? recipe.groups.length : 0,
-      legacyFieldNames: (recipe?.fields || []).map((f) => f.name),
-      specCount: specs.length,
-      groupCount: built.length,
-      groupFieldNames: built.map((g) => g.fields.map((f) => f.name)),
-      rowCounts: built.map((g) => (g.rows || []).length),
-      sampleRows,
-      nonEmptyByGroup: sampleRows.map((row) =>
-        Object.keys(row).filter((k) => String(row[k] || "").trim())
-      ),
-    });
-    // #endregion
     highlightRetrievedItems(allItems);
     NS.overlay.ensureOverlay();
     bindOverlay();
