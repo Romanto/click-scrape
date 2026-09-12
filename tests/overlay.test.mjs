@@ -51,9 +51,30 @@ describe("overlay preview", () => {
       "setSessionHandlers",
       "getVisibleColumns",
       "markTableDirty",
+      "getPreviewRowLimit",
+      "setPreviewRowLimit",
     ]) {
       assert.equal(typeof overlay[name], "function", name);
     }
+  });
+
+  it("Show rows control updates preview limit via session handler", () => {
+    const calls = [];
+    overlay.setSessionHandlers({
+      onPreviewRowLimit(limit) {
+        calls.push(limit);
+      },
+    });
+    overlay.setPreviewRowLimit(200);
+    const sel = document.getElementById("cs-preview-limit");
+    assert.ok(sel);
+    // linkedom select.value may be read-only — drive via selectedIndex.
+    const opt = [...sel.options].find((o) => o.value === "50");
+    assert.ok(opt);
+    opt.selected = true;
+    sel.dispatchEvent(new document.defaultView.Event("change", { bubbles: true }));
+    assert.deepEqual(calls, [50]);
+    assert.equal(overlay.getPreviewRowLimit(), 50);
   });
 
   it("shows empty copy when there are no columns", () => {

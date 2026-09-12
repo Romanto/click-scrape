@@ -83,7 +83,8 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 10. **Preview row edit:** users may edit cells, add rows, and delete rows in the overlay. That sets `rowsDirty` so `refreshGroupRows` will not overwrite edits. **Reset from page** clears dirty and re-scrapes. Recipes never store row payloads — Run always re-scrapes. Export uses the edited `group.rows`.
 11. **Unique ids in selectors:** `cssPath` / singleton `itemSelector` must not stop on an `id` that appears more than once in the document (Amazon reuses `#tp-inline-twister-dim-values-container`). Prefer a unique ancestor (e.g. `#inline-twister-expander-content-size_name`) so Run rematches Size, not Color.
 12. **Edit saved recipe:** Popup **Edit** (or Run → **Edit recipe**) rematches `groups[]` and enables picking — same click-to-add behavior as Start picking (lists auto-detect). Drop columns with × (last column removes that table). **Update recipe** overwrites the same `recipe.id` (keeps name/`createdAt`); still no row snapshots.
-13. **Field nesting adjust:** Broader / Narrower on each field walks the DOM ladder (wrapper ↔ inner text) and rewrites `relativeSelector` via `stepFieldTarget` — no raw CSS/XPath editing. Live outlines + preview update; still item-relative only.
+13. **Field nesting adjust:** Broader / Narrower on each field walks the DOM ladder (wrapper ↔ inner text) and rewrites `relativeSelector` via `stepFieldTarget` — no raw CSS/XPath editing. Live outlines + preview update; still item-relative only. While editing a saved recipe, nesting auto-persists.
+14. **User prefs (device-local):** `previewRowLimit` (Show rows) is stored in `chrome.storage.local` via `getPrefs` / `setPrefs`.
 
 ## How to verify
 

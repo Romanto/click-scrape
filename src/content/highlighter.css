@@ -55,8 +55,26 @@
   color: #2D2A4A !important;
 }
 
-#click-scrape-overlay [hidden] {
-  display: none !important;
+#click-scrape-overlay .cs-prefs-row {
+  align-items: center !important;
+  margin-top: 4px !important;
+}
+
+#click-scrape-overlay .cs-preview-limit-label {
+  font-size: 12px !important;
+  color: #6B7280 !important;
+  font-weight: 600 !important;
+}
+
+#click-scrape-overlay #cs-preview-limit {
+  all: revert;
+  font: 12px system-ui, sans-serif !important;
+  border-radius: 8px !important;
+  border: 1.5px solid #E5E7EB !important;
+  background: #ffffff !important;
+  color: #2D2A4A !important;
+  padding: 6px 8px !important;
+  min-width: 72px !important;
 }
 
 #click-scrape-overlay button:disabled {

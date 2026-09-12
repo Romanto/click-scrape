@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "nesting-v1";
+  const BOOT = "prefs-v1";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -36,6 +36,7 @@
   let editingRecipeId = null;
   /** @type {{ name?: string, createdAt?: number } | null} */
   let editingRecipeMeta = null;
+  let recipePersistTimer = null;
 
   function fieldKey(groupIndex, name) {
     return `${groupIndex}::${name}`;
@@ -531,6 +532,7 @@
         ? `Broader — “${name}” now covers a larger area. Narrower to tighten.`
         : `Narrower — “${name}” now targets a smaller area. Broader to expand.`
     );
+    scheduleRecipePersist();
   }
 
   function remapSelectedAfterGroupRemoved(removedIndex) {
@@ -589,6 +591,7 @@
     });
     NS.overlay.setSessionHandlers?.({
       onEditRecipe: beginRecipeEdit,
+      onPreviewRowLimit: onPreviewRowLimit,
     });
     syncSessionChrome();
   }
@@ -610,6 +613,105 @@
     editingRecipeMeta = recipe?.id
       ? { name: recipe.name, createdAt: recipe.createdAt }
       : null;
+  }
+
+  function buildRecipeFromState() {
+    const groups = state.groups.filter((g) => g.fields?.length && g.rootSelector);
+    if (!groups.length) return null;
+    const primary = groups[0];
+    const updating = !!editingRecipeId;
+    return {
+      id: editingRecipeId || crypto.randomUUID(),
+      name: updating && editingRecipeMeta?.name
+        ? editingRecipeMeta.name
+        : `Recipe ${new Date().toLocaleString()}`,
+      createdAt:
+        updating && editingRecipeMeta?.createdAt != null
+          ? editingRecipeMeta.createdAt
+          : Date.now(),
+      pageUrl: location.href,
+      rootSelector: primary.rootSelector,
+      itemSelector: primary.itemSelector,
+      fields: primary.fields,
+      columnOrder: primary.columnOrder.slice(),
+      hiddenColumns: primary.hiddenColumns.slice(),
+      groups: groups.map((g) => ({
+        rootSelector: g.rootSelector,
+        itemSelector: g.itemSelector,
+        fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
+        columnOrder: g.columnOrder.slice(),
+        hiddenColumns: g.hiddenColumns.slice(),
+      })),
+    };
+  }
+
+  async function persistRecipe(options = {}) {
+    const quiet = !!options.quiet;
+    const recipe = buildRecipeFromState();
+    if (!recipe) return null;
+    const updating = !!editingRecipeId;
+    await NS.storage.saveRecipe(recipe);
+    if (!editingRecipeId) editingRecipeId = recipe.id;
+    editingRecipeMeta = { name: recipe.name, createdAt: recipe.createdAt };
+    syncSaveButtonLabel();
+    if (quiet) {
+      setHint(options.hint || "Nesting saved to this recipe.");
+      return recipe;
+    }
+    let count = 0;
+    try {
+      const recipes = await NS.storage.listRecipes();
+      count = recipes.length;
+    } catch {
+      /* save already succeeded */
+    }
+    const groups = recipe.groups || [];
+    const fieldTotal = groups.reduce((n, g) => n + (g.fields?.length || 0), 0);
+    const verb = updating ? "updated" : "saved";
+    if (NS.storage.shouldNudgeRecipes?.(count)) {
+      setHint(`Recipe ${verb} (${groups.length} table(s), ${fieldTotal} field(s)). ${NS.storage.recipeNudgeCopy(count)}`);
+    } else {
+      setHint(
+        updating
+          ? `Recipe updated (${groups.length} table(s), ${fieldTotal} field(s)).`
+          : `Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). Open the extension popup to re-run.`
+      );
+    }
+    return recipe;
+  }
+
+  function scheduleRecipePersist() {
+    if (!editingRecipeId) return;
+    if (recipePersistTimer) clearTimeout(recipePersistTimer);
+    recipePersistTimer = setTimeout(() => {
+      recipePersistTimer = null;
+      persistRecipe({
+        quiet: true,
+        hint: "Nesting saved to this recipe. Run will rematch the same level.",
+      }).catch(() => {});
+    }, 400);
+  }
+
+  async function loadUserPrefs() {
+    try {
+      const prefs = await NS.storage.getPrefs?.();
+      if (prefs?.previewRowLimit) {
+        NS.overlay.setPreviewRowLimit?.(prefs.previewRowLimit);
+      }
+    } catch {
+      /* prefs are optional */
+    }
+  }
+
+  async function onPreviewRowLimit(limit) {
+    NS.overlay.setPreviewRowLimit?.(limit);
+    applyColumnView();
+    try {
+      await NS.storage.setPrefs?.({ previewRowLimit: limit });
+      setHint(`Preview shows up to ${limit} rows (saved on this device).`);
+    } catch {
+      setHint(`Preview shows up to ${limit} rows.`);
+    }
   }
 
   function deactivatePicking() {
@@ -863,57 +965,10 @@
         if (g) NS.export.exportJson(g.rows || [], groupColumns(g), "click-scrape");
       }
     });
-    overlay.querySelector("#cs-save")?.addEventListener("click", async () => {
-      const groups = state.groups.filter((g) => g.fields?.length && g.rootSelector);
-      if (!groups.length) return;
-      const primary = groups[0];
-      const updating = !!editingRecipeId;
-      const recipe = {
-        id: editingRecipeId || crypto.randomUUID(),
-        name: updating && editingRecipeMeta?.name
-          ? editingRecipeMeta.name
-          : `Recipe ${new Date().toLocaleString()}`,
-        createdAt:
-          updating && editingRecipeMeta?.createdAt != null
-            ? editingRecipeMeta.createdAt
-            : Date.now(),
-        pageUrl: location.href,
-        // Legacy single-table shape (first group) for older Walk / readers.
-        rootSelector: primary.rootSelector,
-        itemSelector: primary.itemSelector,
-        fields: primary.fields,
-        columnOrder: primary.columnOrder.slice(),
-        hiddenColumns: primary.hiddenColumns.slice(),
-        groups: groups.map((g) => ({
-          rootSelector: g.rootSelector,
-          itemSelector: g.itemSelector,
-          fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
-          columnOrder: g.columnOrder.slice(),
-          hiddenColumns: g.hiddenColumns.slice(),
-        })),
-      };
-      await NS.storage.saveRecipe(recipe);
-      if (updating) {
-        editingRecipeMeta = { name: recipe.name, createdAt: recipe.createdAt };
-      }
-      let count = 0;
-      try {
-        const recipes = await NS.storage.listRecipes();
-        count = recipes.length;
-      } catch {
-        /* save already succeeded */
-      }
-      const fieldTotal = groups.reduce((n, g) => n + g.fields.length, 0);
-      const verb = updating ? "updated" : "saved";
-      if (NS.storage.shouldNudgeRecipes?.(count)) {
-        setHint(`Recipe ${verb} (${groups.length} table(s), ${fieldTotal} field(s)). ${NS.storage.recipeNudgeCopy(count)}`);
-      } else {
-        setHint(
-          updating
-            ? `Recipe updated (${groups.length} table(s), ${fieldTotal} field(s)).`
-            : `Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). Open the extension popup to re-run.`
-        );
-      }
+    overlay.querySelector("#cs-save")?.addEventListener("click", () => {
+      persistRecipe({ quiet: false }).catch(() => {
+        setHint("Could not save recipe.");
+      });
     });
     overlay.querySelector("#cs-stop")?.addEventListener("click", stopPicker);
   }
@@ -929,6 +984,7 @@
     state.walked = false;
     bindOverlay();
     syncSessionChrome();
+    loadUserPrefs().then(() => applyColumnView()).catch(() => {});
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown, true);
@@ -948,6 +1004,14 @@
     walkController = null;
     state.active = false;
     state.walking = false;
+    if (recipePersistTimer) {
+      clearTimeout(recipePersistTimer);
+      recipePersistTimer = null;
+    }
+    if (editingRecipeId) {
+      const recipe = buildRecipeFromState();
+      if (recipe) NS.storage.saveRecipe(recipe).catch(() => {});
+    }
     clearEditingSession();
     clearHover();
     clearRetrievedItems();
@@ -1034,6 +1098,7 @@
     highlightRetrievedItems(allItems);
     NS.overlay.ensureOverlay();
     bindOverlay();
+    await loadUserPrefs();
     applyColumnView();
     syncSessionChrome();
     const totalRows = built.reduce((n, g) => n + (g.rows?.length || 0), 0);

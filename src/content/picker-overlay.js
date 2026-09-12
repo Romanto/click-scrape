@@ -1,12 +1,13 @@
 (() => {
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
-  const PREVIEW_LIMIT = 200;
+  const DEFAULT_PREVIEW_LIMIT = 200;
 
   let columnHandlers = {};
   let rowHandlers = {};
   let sessionHandlers = {};
   let visibleColumns = [];
   let rowEditingEnabled = false;
+  let previewRowLimit = DEFAULT_PREVIEW_LIMIT;
 
   function setColumnHandlers(handlers) {
     columnHandlers = handlers && typeof handlers === "object" ? handlers : {};
@@ -19,6 +20,29 @@
 
   function setSessionHandlers(handlers) {
     sessionHandlers = handlers && typeof handlers === "object" ? handlers : {};
+  }
+
+  function getPreviewRowLimit() {
+    return previewRowLimit;
+  }
+
+  function setPreviewRowLimit(n) {
+    const limit = Number(n);
+    if (Number.isFinite(limit) && limit >= 1) previewRowLimit = Math.floor(limit);
+    syncPreviewLimitControl();
+  }
+
+  function syncPreviewLimitControl() {
+    const sel = document.getElementById("cs-preview-limit");
+    if (!sel) return;
+    const value = String(previewRowLimit);
+    if (![...sel.options].some((o) => o.value === value)) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = value;
+      sel.appendChild(opt);
+    }
+    sel.value = value;
   }
 
   function getVisibleColumns() {
@@ -37,13 +61,14 @@
 
   function ensureOverlay() {
     let el = document.getElementById("click-scrape-overlay");
-    // Rebuild if an older inject left a panel without Edit recipe.
-    if (el && !el.querySelector("#cs-edit-recipe")) {
+    // Rebuild if an older inject left a panel without current chrome.
+    if (el && (!el.querySelector("#cs-edit-recipe") || !el.querySelector("#cs-preview-limit"))) {
       el.remove();
       el = null;
     }
     if (el) {
       bindOverlayUi(el);
+      syncPreviewLimitControl();
       return el;
     }
     el = document.createElement("div");
@@ -63,10 +88,21 @@
         <button type="button" id="cs-save" class="secondary">Save recipe</button>
         <button type="button" id="cs-stop" class="danger">Stop</button>
       </div>
+      <div class="cs-row cs-prefs-row">
+        <label class="cs-preview-limit-label" for="cs-preview-limit">Show rows</label>
+        <select id="cs-preview-limit" title="How many rows to show in the preview table" aria-label="Show rows in preview">
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200" selected>200</option>
+          <option value="500">500</option>
+        </select>
+      </div>
       <div id="cs-preview"></div>
     `;
     document.documentElement.appendChild(el);
     bindOverlayUi(el);
+    syncPreviewLimitControl();
     return el;
   }
 
@@ -144,6 +180,20 @@
         e.preventDefault();
         startRename(rename);
       }
+    });
+
+    el.addEventListener("change", (e) => {
+      const t = e.target;
+      if (!(t instanceof Element) || t.id !== "cs-preview-limit") return;
+      const raw =
+        t.value ||
+        (typeof t.selectedIndex === "number" && t.options?.[t.selectedIndex]
+          ? t.options[t.selectedIndex].value
+          : "");
+      const limit = Number(raw);
+      if (!Number.isFinite(limit) || limit < 1) return;
+      previewRowLimit = Math.floor(limit);
+      callHandler(sessionHandlers, "onPreviewRowLimit", previewRowLimit);
     });
 
     el.addEventListener("focusout", (e) => {
@@ -260,7 +310,7 @@
     const rowList = Array.isArray(rows) ? rows : [];
     const cols = Array.isArray(columns) ? columns : [];
     const gi = groupIndex == null ? "" : String(groupIndex);
-    const slice = rowList.slice(0, PREVIEW_LIMIT);
+    const slice = rowList.slice(0, previewRowLimit);
     const last = cols.length - 1;
     const groupAttr = gi === "" ? "" : ` data-cs-group="${escapeHtml(gi)}"`;
     const dirty = !!options.rowsDirty;
@@ -436,5 +486,7 @@
     setSessionHandlers,
     getVisibleColumns,
     markTableDirty,
+    getPreviewRowLimit,
+    setPreviewRowLimit,
   };
 })();
