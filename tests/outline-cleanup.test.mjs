@@ -305,4 +305,44 @@ describe("outline cleanup", () => {
     assert.equal(document.querySelectorAll("#inline-twister-row-size_name .click-scrape-item").length, 5);
     assert.equal(document.querySelectorAll("#inline-twister-row-number_of_items .click-scrape-item").length, 4);
   });
+
+  it("picking shipping after price keeps shipping in its own filled table", () => {
+    const html = loadFixture("shipping-israel.html");
+    const { document, startPicker, pick } = loadPicker(html);
+
+    startPicker();
+    const nameInput = document.getElementById("cs-field-name");
+    nameInput.value = "Price";
+    pick(document.querySelector(".a-price-whole"));
+    nameInput.value = "Shipping";
+    const ship = [...document.querySelectorAll("span")].find((s) =>
+      s.textContent.includes("No Import Charges")
+    );
+    assert.ok(ship);
+    pick(ship);
+
+    const tables = [...document.querySelectorAll("#cs-preview .cs-preview-table")];
+    assert.equal(tables.length, 2, "price and shipping each get a table");
+    assert.ok(tables[0].textContent.includes("20"), "price table filled");
+    assert.ok(
+      tables[1].textContent.includes("No Import Charges") && tables[1].textContent.includes("Israel"),
+      "shipping table filled — not empty cells glued onto the price block"
+    );
+    assert.ok(!tables[0].textContent.includes("Israel"), "price table does not include shipping");
+  });
+
+  it("picking shipping alone fills one row", () => {
+    const html = loadFixture("shipping-israel.html");
+    const { document, startPicker, pick } = loadPicker(html);
+
+    startPicker();
+    const ship = [...document.querySelectorAll("span")].find((s) =>
+      s.textContent.includes("No Import Charges")
+    );
+    pick(ship);
+    const preview = document.getElementById("cs-preview").textContent;
+    assert.ok(preview.includes("No Import Charges"));
+    assert.ok(preview.includes("Israel"));
+    assert.equal(document.querySelectorAll("#cs-preview tbody tr").length, 1);
+  });
 });

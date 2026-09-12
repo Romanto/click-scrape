@@ -273,7 +273,9 @@
         state.groups = [createGroup(ctx)];
         groupIndex = 0;
       } else {
-        groupIndex = state.groups.length - 1;
+        // Outside every current live item (e.g. price block then shipping line):
+        // start a new table — do not glue onto the last group (that yields empty cells).
+        groupIndex = startSiblingGroup(ctx);
       }
     }
 
