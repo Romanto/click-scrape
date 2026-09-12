@@ -52,16 +52,34 @@
     return part;
   }
 
+  function idSelector(el) {
+    if (!el?.id) return null;
+    return `${el.tagName.toLowerCase()}#${CSS.escape(el.id)}`;
+  }
+
+  /** True when this id selects exactly one node in the document (Amazon reuses ids). */
+  function isUniqueId(el) {
+    if (!el?.id) return false;
+    const sel = idSelector(el);
+    try {
+      return document.querySelectorAll(sel).length === 1;
+    } catch {
+      return false;
+    }
+  }
+
   function cssPath(el) {
     if (!(el instanceof Element)) return "";
     const parts = [];
     let node = el;
     while (node && node.nodeType === Node.ELEMENT_NODE && node !== document.body && node !== document.documentElement) {
-      if (node.id) {
-        parts.unshift(`${node.tagName.toLowerCase()}#${CSS.escape(node.id)}`);
+      // Amazon reuses ids (e.g. #tp-inline-twister-dim-values-container ×3). Only stop on unique ids
+      // so saved recipes rematch Size under the size expander, not Color/Pack.
+      if (node.id && isUniqueId(node)) {
+        parts.unshift(idSelector(node));
         break;
       }
-      parts.unshift(partFor(node, { allowNth: true }));
+      parts.unshift(partFor(node, { allowNth: true, allowId: false }));
       node = node.parentElement;
     }
     return parts.join(" > ");
@@ -90,7 +108,10 @@
   /** CSS selector for repeating items under a list root (tag + shared classes when possible). */
   function itemSelectorFor(sample, peers) {
     // One-item sessions must not rematch every page-wide .celwidget on Walk/save.
-    if (peers.length === 1 && sample?.id) return `#${CSS.escape(sample.id)}`;
+    // Only use an id when it is unique in the document.
+    if (peers.length === 1 && sample?.id && isUniqueId(sample)) {
+      return `#${CSS.escape(sample.id)}`;
+    }
     const tag = sample.tagName.toLowerCase();
     const shared = sharedClasses(peers.length ? peers : [sample]);
     if (shared.length) return tag + classSuffix(shared);
@@ -671,6 +692,115 @@
     return trimmed;
   }
 
+  const FIELD_SKIP_TAGS = new Set([
+    "SCRIPT",
+    "STYLE",
+    "NOSCRIPT",
+    "SVG",
+    "PATH",
+    "BR",
+    "HR",
+    "IMG",
+    "INPUT",
+    "BUTTON",
+    "TEXTAREA",
+    "SELECT",
+    "META",
+    "LINK",
+  ]);
+
+  function isMeaningfulFieldNode(el) {
+    if (!(el instanceof Element)) return false;
+    if (FIELD_SKIP_TAGS.has(el.tagName)) return false;
+    if (el.id === "click-scrape-overlay" || el.closest?.("#click-scrape-overlay")) return false;
+    return true;
+  }
+
+  function textWeight(el) {
+    return String(el?.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim().length;
+  }
+
+  /** Prefer a single content branch when narrowing (wrapper → inner text host). */
+  function preferredNarrowChild(el) {
+    if (!(el instanceof Element)) return null;
+    const kids = [...el.children].filter(isMeaningfulFieldNode);
+    if (!kids.length) return null;
+    if (kids.length === 1) return kids[0];
+    let best = null;
+    let bestScore = -1;
+    for (const k of kids) {
+      const tw = textWeight(k);
+      if (tw === 0 && !k.children.length) continue;
+      // Prefer text-heavy branches; slight boost for leaves with text.
+      const score = tw * 10 + (k.children.length ? 0 : 1);
+      if (score > bestScore) {
+        best = k;
+        bestScore = score;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Ladder from list item → current field → preferred descendants (max ~8).
+   * Used for Broader / Narrower nesting adjust.
+   */
+  function fieldTargetLadder(item, currentEl, options = {}) {
+    const maxLen = Math.max(2, Number(options.maxLength) || 8);
+    if (!(item instanceof Element) || !(currentEl instanceof Element)) return [];
+    if (item !== currentEl && !item.contains(currentEl)) return [];
+
+    const between = [];
+    let node = currentEl;
+    while (node && node !== item) {
+      between.unshift(node);
+      node = node.parentElement;
+    }
+    if (node !== item) return [];
+
+    const chain = [item, ...between];
+    let tip = currentEl;
+    while (chain.length < maxLen) {
+      const child = preferredNarrowChild(tip);
+      if (!child || chain.includes(child)) break;
+      chain.push(child);
+      tip = child;
+    }
+    return chain;
+  }
+
+  function fieldTargetStepInfo(item, currentEl) {
+    const ladder = fieldTargetLadder(item, currentEl);
+    const index = ladder.indexOf(currentEl);
+    return {
+      ladder,
+      index,
+      canBroader: index > 0,
+      canNarrower: index >= 0 && index < ladder.length - 1,
+    };
+  }
+
+  /**
+   * @param {Element} item
+   * @param {Element} currentEl
+   * @param {-1|1|"broader"|"narrower"} direction -1/broader = toward item; 1/narrower = toward leaf
+   * @returns {Element|null}
+   */
+  function stepFieldTarget(item, currentEl, direction) {
+    const dir =
+      direction === -1 || direction === "broader"
+        ? -1
+        : direction === 1 || direction === "narrower"
+          ? 1
+          : 0;
+    if (!dir) return null;
+    const { ladder, index } = fieldTargetStepInfo(item, currentEl);
+    if (index < 0) return null;
+    return ladder[index + dir] || null;
+  }
+
   NS.selectors = {
     cssPath,
     findListContext,
@@ -678,5 +808,8 @@
     queryItems,
     findSimilarPeers,
     getSimilarScopeRoot,
+    fieldTargetLadder,
+    fieldTargetStepInfo,
+    stepFieldTarget,
   };
 })();

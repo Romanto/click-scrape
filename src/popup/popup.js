@@ -45,11 +45,21 @@ async function renderRecipes() {
         <strong></strong>
         <span></span>
       </div>
-      <button type="button" class="secondary run">Run</button>
-      <button type="button" class="danger del">Del</button>
+      <div class="actions">
+        <button type="button" class="secondary edit">Edit</button>
+        <button type="button" class="secondary run">Run</button>
+        <button type="button" class="danger del">Del</button>
+      </div>
     `;
     li.querySelector("strong").textContent = recipe.name;
     li.querySelector("span").textContent = recipe.pageUrl || recipe.rootSelector;
+    li.querySelector(".edit").addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "CLICK_SCRAPE_EDIT_ON_TAB", recipe }, (res) => {
+        if (chrome.runtime.lastError) showStatus(chrome.runtime.lastError.message);
+        else if (!res?.ok) showStatus(res?.error || "Edit failed");
+        else window.close();
+      });
+    });
     li.querySelector(".run").addEventListener("click", () => {
       chrome.runtime.sendMessage({ type: "CLICK_SCRAPE_RUN_ON_TAB", recipe }, (res) => {
         if (chrome.runtime.lastError) showStatus(chrome.runtime.lastError.message);

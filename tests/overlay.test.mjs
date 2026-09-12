@@ -47,10 +47,34 @@ describe("overlay preview", () => {
       "removeOverlay",
       "escapeHtml",
       "setColumnHandlers",
+      "setRowHandlers",
+      "setSessionHandlers",
       "getVisibleColumns",
+      "markTableDirty",
+      "getPreviewRowLimit",
+      "setPreviewRowLimit",
     ]) {
       assert.equal(typeof overlay[name], "function", name);
     }
+  });
+
+  it("Show rows control updates preview limit via session handler", () => {
+    const calls = [];
+    overlay.setSessionHandlers({
+      onPreviewRowLimit(limit) {
+        calls.push(limit);
+      },
+    });
+    overlay.setPreviewRowLimit(200);
+    const sel = document.getElementById("cs-preview-limit");
+    assert.ok(sel);
+    // linkedom select.value may be read-only — drive via selectedIndex.
+    const opt = [...sel.options].find((o) => o.value === "50");
+    assert.ok(opt);
+    opt.selected = true;
+    sel.dispatchEvent(new document.defaultView.Event("change", { bubbles: true }));
+    assert.deepEqual(calls, [50]);
+    assert.equal(overlay.getPreviewRowLimit(), 50);
   });
 
   it("shows empty copy when there are no columns", () => {
@@ -86,15 +110,15 @@ describe("overlay preview", () => {
     assert.equal(document.querySelector("#cs-preview .cs-empty").textContent, "Custom empty.");
   });
 
-  it("renders the first 20 rows and a count caption", () => {
-    const rows = Array.from({ length: 25 }, (_, i) => ({ Title: `Row ${i + 1}` }));
+  it("renders the first 200 rows and a count caption", () => {
+    const rows = Array.from({ length: 250 }, (_, i) => ({ Title: `Row ${i + 1}` }));
     overlay.renderPreview(rows, ["Title"]);
     const trs = document.querySelectorAll("#cs-preview tbody tr");
-    assert.equal(trs.length, 20);
+    assert.equal(trs.length, 200);
     const hint = document.querySelector("#cs-preview .cs-hint");
-    assert.equal(hint.textContent, "25 row(s) — showing 20");
-    assert.match(document.querySelector("#cs-preview tbody").textContent, /Row 20/);
-    assert.doesNotMatch(document.querySelector("#cs-preview tbody").textContent, /Row 21/);
+    assert.equal(hint.textContent, "250 rows · showing 200");
+    assert.match(document.querySelector("#cs-preview tbody").textContent, /Row 200/);
+    assert.doesNotMatch(document.querySelector("#cs-preview tbody").textContent, /Row 201/);
   });
 
   it("renders rename, drop, and up/down controls without mutating rows", () => {
@@ -138,16 +162,57 @@ describe("overlay preview", () => {
     assert.ok(document.querySelector('[data-cs-col="Price"]'));
   });
 
-  it("shows field names primary and selectors secondary", () => {
+  it("shows field names with Broader/Narrower and hides raw selectors", () => {
     overlay.renderFields([
-      { name: "Title", relativeSelector: ":scope > .title" },
-      { name: "Price", relativeSelector: ":scope .price" },
+      {
+        name: "Title",
+        relativeSelector: ":scope > .title",
+        sample: "Acme Notebook",
+        canBroader: true,
+        canNarrower: false,
+      },
+      {
+        name: "Price",
+        relativeSelector: ":scope .price",
+        sample: "$12.00",
+        canBroader: false,
+        canNarrower: true,
+      },
     ]);
     const items = [...document.querySelectorAll("#cs-fields .cs-field")];
     assert.equal(items.length, 2);
     assert.equal(items[0].querySelector(".cs-field-name").textContent, "Title");
-    assert.equal(items[0].querySelector(".cs-field-sel").textContent, ":scope > .title");
+    assert.equal(items[0].querySelector(".cs-field-sample").textContent, "Acme Notebook");
+    assert.equal(items[0].querySelector(".cs-field-sel").hidden, true);
     assert.ok(items[0].querySelector('[data-cs-drop="Title"]'));
+    const broader = items[0].querySelector('[data-cs-adjust="Title"][data-cs-dir="-1"]');
+    const narrower = items[0].querySelector('[data-cs-adjust="Title"][data-cs-dir="1"]');
+    assert.ok(broader && !broader.disabled);
+    assert.ok(narrower && narrower.disabled);
+  });
+
+  it("Broader/Narrower fire onAdjustField", () => {
+    const calls = [];
+    overlay.setColumnHandlers({
+      onAdjustField(name, dir, groupIndex) {
+        calls.push([name, dir, groupIndex]);
+      },
+    });
+    overlay.renderFields([
+      {
+        name: "Title",
+        relativeSelector: ":scope .title",
+        canBroader: true,
+        canNarrower: true,
+        groupIndex: 0,
+      },
+    ]);
+    click(document.querySelector('[data-cs-adjust="Title"][data-cs-dir="-1"]'));
+    click(document.querySelector('[data-cs-adjust="Title"][data-cs-dir="1"]'));
+    assert.deepEqual(calls, [
+      ["Title", -1, 0],
+      ["Title", 1, 0],
+    ]);
   });
 
   it("renderPreview options.tables draws separate tables from row 1", () => {
@@ -163,5 +228,78 @@ describe("overlay preview", () => {
     assert.ok(!tables[0].textContent.includes("Small"));
     assert.ok(tables[1].textContent.includes("Small"));
     assert.ok(!tables[1].textContent.includes("12"));
+  });
+
+  it("shows Edit recipe control (hidden until Run)", () => {
+    const btn = document.querySelector("#cs-edit-recipe");
+    assert.ok(btn);
+    assert.equal(btn.textContent, "Edit recipe");
+    assert.equal(btn.hidden, true);
+    assert.equal(document.querySelector("#cs-new-list"), null);
+  });
+
+  it("session handler fires for Edit recipe", () => {
+    const calls = [];
+    overlay.setSessionHandlers({
+      onEditRecipe() {
+        calls.push("edit");
+      },
+    });
+    const editBtn = document.querySelector("#cs-edit-recipe");
+    editBtn.hidden = false;
+    editBtn.disabled = false;
+    click(editBtn);
+    assert.deepEqual(calls, ["edit"]);
+  });
+
+  it("row handlers fire for cell edit, add, and delete", () => {
+    const calls = [];
+    overlay.setRowHandlers({
+      onEditCell(groupIndex, rowIndex, col, value) {
+        calls.push(["edit", groupIndex, rowIndex, col, value]);
+      },
+      onAddRow(groupIndex) {
+        calls.push(["add", groupIndex]);
+      },
+      onDeleteRow(groupIndex, rowIndex) {
+        calls.push(["del", groupIndex, rowIndex]);
+      },
+      onResetRows(groupIndex) {
+        calls.push(["reset", groupIndex]);
+      },
+    });
+    overlay.renderPreview([], [], {
+      tables: [
+        {
+          groupIndex: 0,
+          columns: ["Title"],
+          rows: [{ Title: "A" }, { Title: "B" }],
+          rowsDirty: true,
+        },
+      ],
+    });
+    assert.ok(document.querySelector('td.cs-cell[data-cs-row="0"]'));
+    const cell = document.querySelector('td.cs-cell[data-cs-row="1"][data-cs-col="Title"]');
+    cell.textContent = "edited";
+    cell.dispatchEvent(new document.defaultView.Event("focusout", { bubbles: true }));
+    click(document.querySelector('[data-cs-del-row="0"]'));
+    click(document.querySelector("[data-cs-add-row]"));
+    click(document.querySelector("[data-cs-reset-rows]"));
+    assert.deepEqual(calls, [
+      ["edit", 0, 1, "Title", "edited"],
+      ["del", 0, 0],
+      ["add", 0],
+      ["reset", 0],
+    ]);
+  });
+
+  it("shows an empty editable table with Add row when row handlers are set", () => {
+    overlay.setRowHandlers({
+      onAddRow() {},
+    });
+    overlay.renderPreview([], ["Title"]);
+    assert.equal(document.querySelector("#cs-preview .cs-empty"), null);
+    assert.ok(document.querySelector("#cs-preview table"));
+    assert.ok(document.querySelector("[data-cs-add-row]"));
   });
 });

@@ -5,6 +5,7 @@ const CONTENT_FILES = [
   "src/shared/storage.js",
   "src/shared/pagination.js",
   "src/shared/columns.js",
+  "src/shared/rows.js",
   "src/content/picker-overlay.js",
   "src/content/content.js",
 ];
@@ -42,6 +43,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       if (!tab?.id) throw new Error("No active tab");
       await injectPicker(tab.id);
       await chrome.tabs.sendMessage(tab.id, { type: "CLICK_SCRAPE_RUN_RECIPE", recipe: msg.recipe });
+      sendResponse({ ok: true });
+    })().catch((err) => sendResponse({ ok: false, error: String(err.message || err) }));
+    return true;
+  }
+
+  if (msg?.type === "CLICK_SCRAPE_EDIT_ON_TAB") {
+    (async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) throw new Error("No active tab");
+      if (tab.url?.startsWith("chrome://") || tab.url?.startsWith("chrome-extension://")) {
+        throw new Error("Can't run on this page. Open a normal website.");
+      }
+      await injectPicker(tab.id);
+      await chrome.tabs.sendMessage(tab.id, { type: "CLICK_SCRAPE_EDIT_RECIPE", recipe: msg.recipe });
       sendResponse({ ok: true });
     })().catch((err) => sendResponse({ ok: false, error: String(err.message || err) }));
     return true;

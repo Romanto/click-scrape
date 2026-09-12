@@ -1,12 +1,19 @@
 (() => {
-  if (globalThis.__clickScrapeLoaded) {
+  const BOOT = "prefs-v1";
+  if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
+  try {
+    globalThis.__clickScrapeTeardown?.();
+  } catch {
+    /* previous session may already be gone */
+  }
+  globalThis.__clickScrapeBoot = BOOT;
   globalThis.__clickScrapeLoaded = true;
 
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
 
-  /** @typedef {{ rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[] }} ListGroup */
+  /** @typedef {{ rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
 
   let state = {
     active: false,
@@ -25,6 +32,11 @@
   let retrievedItemNodes = [];
   /** @type {Map<string, Set<Element>>} key = `${groupIndex}::${fieldName}` */
   let selectedByField = new Map();
+  /** @type {string | null} */
+  let editingRecipeId = null;
+  /** @type {{ name?: string, createdAt?: number } | null} */
+  let editingRecipeMeta = null;
+  let recipePersistTimer = null;
 
   function fieldKey(groupIndex, name) {
     return `${groupIndex}::${name}`;
@@ -66,6 +78,7 @@
       rows: [],
       columnOrder: [],
       hiddenColumns: [],
+      rowsDirty: false,
     };
   }
 
@@ -315,7 +328,15 @@
       name;
     markFieldSelected(groupIndex, fieldName, el);
     if (nameInput) nameInput.value = "";
-    refreshUi();
+    if (group.rowsDirty) {
+      mergeFieldIntoDirtyGroup(group, fieldName);
+      highlightRetrievedItems(
+        state.groups.flatMap((g) => (g.fields.length ? outlineItemsForGroup(g) : []))
+      );
+      applyColumnView();
+    } else {
+      refreshUi();
+    }
   }
 
   function onKeyDown(e) {
@@ -343,8 +364,43 @@
         groupIndex,
         columns: groupColumns(group),
         rows: Array.isArray(group.rows) ? group.rows : [],
+        rowsDirty: !!group.rowsDirty,
       }))
       .filter((t) => t.columns.length);
+  }
+
+  function resolveGroupItem(group) {
+    if (!group) return null;
+    if (group.sampleItem?.isConnected) return group.sampleItem;
+    const live = (group.liveItems || []).find((n) => n?.isConnected);
+    if (live) return live;
+    return outlineItemsForGroup(group)[0] || null;
+  }
+
+  function fieldAdjustMeta(group, field) {
+    const item = resolveGroupItem(group);
+    if (!item || !field?.relativeSelector) {
+      return { sample: "", canBroader: false, canNarrower: false };
+    }
+    let el = null;
+    try {
+      el = NS.extract.queryField?.(item, field.relativeSelector);
+    } catch {
+      el = null;
+    }
+    if (!(el instanceof Element)) {
+      return { sample: "", canBroader: false, canNarrower: false };
+    }
+    const info = NS.selectors.fieldTargetStepInfo?.(item, el) || {};
+    const sample = String(el.textContent || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 56);
+    return {
+      sample,
+      canBroader: !!info.canBroader,
+      canNarrower: !!info.canNarrower,
+    };
   }
 
   function visibleFieldList() {
@@ -353,7 +409,9 @@
       const byName = new Map(group.fields.map((f) => [f.name, f]));
       for (const n of groupColumns(group)) {
         const field = byName.get(n);
-        if (field) out.push({ ...field, groupIndex });
+        if (!field) continue;
+        const meta = fieldAdjustMeta(group, field);
+        out.push({ ...field, groupIndex, ...meta });
       }
     });
     return out;
@@ -410,20 +468,11 @@
     group.fields = updated.fields;
     group.columnOrder = updated.columnOrder;
     group.hiddenColumns = updated.hiddenColumns;
+    if (NS.rows?.stripColumn) group.rows = NS.rows.stripColumn(group.rows, name);
     if (field) clearFieldOutlines(gi, field.name, field.relativeSelector);
     if (!group.fields.length) {
       state.groups.splice(gi, 1);
-      // Remap selected keys after splice
-      const nextMap = new Map();
-      selectedByField.forEach((set, key) => {
-        const [idxStr, ...rest] = key.split("::");
-        let idx = Number(idxStr);
-        if (Number.isNaN(idx)) return;
-        if (idx === gi) return;
-        if (idx > gi) idx -= 1;
-        nextMap.set(fieldKey(idx, rest.join("::")), set);
-      });
-      selectedByField = nextMap;
+      remapSelectedAfterGroupRemoved(gi);
     }
     if (!state.groups.length) {
       clearSelectedMarks();
@@ -431,7 +480,8 @@
       refreshUi();
       return;
     }
-    refreshUi();
+    if (group.rowsDirty) applyColumnView();
+    else refreshUi();
   }
 
   function onMove(name, dir, groupIndex) {
@@ -443,8 +493,295 @@
     applyColumnView();
   }
 
+  function onAdjustField(name, dir, groupIndex) {
+    if (state.walking) return;
+    const gi = findGroupIndexForFieldName(name, groupIndex);
+    if (gi < 0) return;
+    const group = state.groups[gi];
+    const field = group.fields.find((f) => f.name === name);
+    if (!field) return;
+    const item = resolveGroupItem(group);
+    if (!item) return;
+    let current = null;
+    try {
+      current = NS.extract.queryField?.(item, field.relativeSelector);
+    } catch {
+      current = null;
+    }
+    if (!(current instanceof Element)) return;
+    const next = NS.selectors.stepFieldTarget?.(item, current, dir);
+    if (!(next instanceof Element) || next === current) return;
+
+    const oldRel = field.relativeSelector;
+    clearFieldOutlines(gi, name, oldRel);
+    field.relativeSelector = NS.selectors.relativeSelector(item, next);
+    if (!group.sampleItem?.isConnected) group.sampleItem = item;
+    markFieldSelected(gi, name, next);
+
+    if (group.rowsDirty) {
+      mergeFieldIntoDirtyGroup(group, name);
+      highlightRetrievedItems(
+        state.groups.flatMap((g) => (g.fields.length ? outlineItemsForGroup(g) : []))
+      );
+      applyColumnView();
+    } else {
+      refreshUi();
+    }
+    setHint(
+      dir < 0
+        ? `Broader — “${name}” now covers a larger area. Narrower to tighten.`
+        : `Narrower — “${name}” now targets a smaller area. Broader to expand.`
+    );
+    scheduleRecipePersist();
+  }
+
+  function remapSelectedAfterGroupRemoved(removedIndex) {
+    const nextMap = new Map();
+    selectedByField.forEach((set, key) => {
+      const [idxStr, ...rest] = key.split("::");
+      let idx = Number(idxStr);
+      if (Number.isNaN(idx)) return;
+      if (idx === removedIndex) return;
+      if (idx > removedIndex) idx -= 1;
+      nextMap.set(fieldKey(idx, rest.join("::")), set);
+    });
+    selectedByField = nextMap;
+  }
+
+  function syncSessionChrome() {
+    syncSaveButtonLabel();
+    syncEditRecipeButton();
+  }
+
+  function syncEditRecipeButton() {
+    const btn = document.querySelector("#cs-edit-recipe");
+    if (!btn) return;
+    // After Run: offer Edit so the user can add fields, then Update.
+    const show = !!editingRecipeId && !state.active && !state.walking;
+    btn.hidden = !show;
+    btn.disabled = !show;
+  }
+
+  function beginRecipeEdit() {
+    if (!editingRecipeId || state.walking) return;
+    if (!state.active) {
+      startPicker({ preserveGroups: true });
+    }
+    syncSessionChrome();
+    const n = state.groups.length;
+    setHint(
+      `Editing recipe — ${n} table(s). Click the page to add fields or lists. Update recipe when done.`
+    );
+  }
+
   function bindColumnHandlers() {
-    NS.overlay.setColumnHandlers(state.walking ? {} : { onRename, onDrop, onMove });
+    if (state.walking) {
+      NS.overlay.setColumnHandlers({});
+      NS.overlay.setRowHandlers?.({});
+      NS.overlay.setSessionHandlers?.({});
+      syncSessionChrome();
+      return;
+    }
+    NS.overlay.setColumnHandlers({ onRename, onDrop, onMove, onAdjustField });
+    NS.overlay.setRowHandlers?.({
+      onEditCell,
+      onAddRow,
+      onDeleteRow,
+      onResetRows,
+    });
+    NS.overlay.setSessionHandlers?.({
+      onEditRecipe: beginRecipeEdit,
+      onPreviewRowLimit: onPreviewRowLimit,
+    });
+    syncSessionChrome();
+  }
+
+  function syncSaveButtonLabel() {
+    const btn = document.querySelector("#cs-save");
+    if (!btn) return;
+    btn.textContent = editingRecipeId ? "Update recipe" : "Save recipe";
+  }
+
+  function clearEditingSession() {
+    editingRecipeId = null;
+    editingRecipeMeta = null;
+    syncSessionChrome();
+  }
+
+  function attachRecipeSession(recipe) {
+    editingRecipeId = recipe?.id || null;
+    editingRecipeMeta = recipe?.id
+      ? { name: recipe.name, createdAt: recipe.createdAt }
+      : null;
+  }
+
+  function buildRecipeFromState() {
+    const groups = state.groups.filter((g) => g.fields?.length && g.rootSelector);
+    if (!groups.length) return null;
+    const primary = groups[0];
+    const updating = !!editingRecipeId;
+    return {
+      id: editingRecipeId || crypto.randomUUID(),
+      name: updating && editingRecipeMeta?.name
+        ? editingRecipeMeta.name
+        : `Recipe ${new Date().toLocaleString()}`,
+      createdAt:
+        updating && editingRecipeMeta?.createdAt != null
+          ? editingRecipeMeta.createdAt
+          : Date.now(),
+      pageUrl: location.href,
+      rootSelector: primary.rootSelector,
+      itemSelector: primary.itemSelector,
+      fields: primary.fields,
+      columnOrder: primary.columnOrder.slice(),
+      hiddenColumns: primary.hiddenColumns.slice(),
+      groups: groups.map((g) => ({
+        rootSelector: g.rootSelector,
+        itemSelector: g.itemSelector,
+        fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
+        columnOrder: g.columnOrder.slice(),
+        hiddenColumns: g.hiddenColumns.slice(),
+      })),
+    };
+  }
+
+  async function persistRecipe(options = {}) {
+    const quiet = !!options.quiet;
+    const recipe = buildRecipeFromState();
+    if (!recipe) return null;
+    const updating = !!editingRecipeId;
+    await NS.storage.saveRecipe(recipe);
+    if (!editingRecipeId) editingRecipeId = recipe.id;
+    editingRecipeMeta = { name: recipe.name, createdAt: recipe.createdAt };
+    syncSaveButtonLabel();
+    if (quiet) {
+      setHint(options.hint || "Nesting saved to this recipe.");
+      return recipe;
+    }
+    let count = 0;
+    try {
+      const recipes = await NS.storage.listRecipes();
+      count = recipes.length;
+    } catch {
+      /* save already succeeded */
+    }
+    const groups = recipe.groups || [];
+    const fieldTotal = groups.reduce((n, g) => n + (g.fields?.length || 0), 0);
+    const verb = updating ? "updated" : "saved";
+    if (NS.storage.shouldNudgeRecipes?.(count)) {
+      setHint(`Recipe ${verb} (${groups.length} table(s), ${fieldTotal} field(s)). ${NS.storage.recipeNudgeCopy(count)}`);
+    } else {
+      setHint(
+        updating
+          ? `Recipe updated (${groups.length} table(s), ${fieldTotal} field(s)).`
+          : `Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). Open the extension popup to re-run.`
+      );
+    }
+    return recipe;
+  }
+
+  function scheduleRecipePersist() {
+    if (!editingRecipeId) return;
+    if (recipePersistTimer) clearTimeout(recipePersistTimer);
+    recipePersistTimer = setTimeout(() => {
+      recipePersistTimer = null;
+      persistRecipe({
+        quiet: true,
+        hint: "Nesting saved to this recipe. Run will rematch the same level.",
+      }).catch(() => {});
+    }, 400);
+  }
+
+  async function loadUserPrefs() {
+    try {
+      const prefs = await NS.storage.getPrefs?.();
+      if (prefs?.previewRowLimit) {
+        NS.overlay.setPreviewRowLimit?.(prefs.previewRowLimit);
+      }
+    } catch {
+      /* prefs are optional */
+    }
+  }
+
+  async function onPreviewRowLimit(limit) {
+    NS.overlay.setPreviewRowLimit?.(limit);
+    applyColumnView();
+    try {
+      await NS.storage.setPrefs?.({ previewRowLimit: limit });
+      setHint(`Preview shows up to ${limit} rows (saved on this device).`);
+    } catch {
+      setHint(`Preview shows up to ${limit} rows.`);
+    }
+  }
+
+  function deactivatePicking() {
+    if (!state.active) return;
+    state.active = false;
+    document.removeEventListener("mousemove", onMouseMove, true);
+    document.removeEventListener("click", onClick, true);
+    document.removeEventListener("keydown", onKeyDown, true);
+  }
+
+  function anyRowsDirty() {
+    return state.groups.some((g) => g.rowsDirty);
+  }
+
+  function onEditCell(groupIndex, rowIndex, column, value) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group || !column) return;
+    const prev = group.rows?.[rowIndex]?.[column];
+    const nextVal = String(value ?? "");
+    if (prev === nextVal && group.rowsDirty) return;
+    group.rows = NS.rows.updateCell(group.rows, rowIndex, column, nextVal);
+    group.rowsDirty = true;
+    // Keep caret / focus — do not rebuild the whole table on every cell blur.
+    NS.overlay.markTableDirty?.(groupIndex, true);
+  }
+
+  function onAddRow(groupIndex) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group) return;
+    group.rows = NS.rows.addRow(group.rows, groupColumns(group));
+    group.rowsDirty = true;
+    applyColumnView();
+  }
+
+  function onDeleteRow(groupIndex, rowIndex) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group) return;
+    group.rows = NS.rows.removeRow(group.rows, rowIndex);
+    group.rowsDirty = true;
+    applyColumnView();
+  }
+
+  function onResetRows(groupIndex) {
+    if (state.walking) return;
+    const group = state.groups[groupIndex];
+    if (!group) return;
+    group.rowsDirty = false;
+    const outlined = refreshGroupRows(group);
+    highlightRetrievedItems(
+      state.groups.flatMap((g, i) => {
+        if (!g.fields.length) return [];
+        if (i === groupIndex) return outlined;
+        return outlineItemsForGroup(g);
+      })
+    );
+    applyColumnView();
+    setHint("Table reset from the page.");
+  }
+
+  function mergeFieldIntoDirtyGroup(group, fieldName) {
+    if (!group || !fieldName) return;
+    const live = (group.liveItems || []).filter((n) => n?.isConnected);
+    const items = live.length ? live : outlineItemsForGroup(group);
+    if (items.length) group.liveItems = items.filter((n) => n?.nodeType === 1);
+    const scraped =
+      NS.extract.retrieveRowsFromItems?.(group.liveItems, group.fields) || [];
+    group.rows = NS.rows.mergeColumn(group.rows, fieldName, scraped);
   }
 
   function setHint(text) {
@@ -460,6 +797,9 @@
   }
 
   function refreshGroupRows(group) {
+    if (group.rowsDirty) {
+      return outlineItemsForGroup(group);
+    }
     const live = (group.liveItems || []).filter((n) => n?.isConnected);
     if (live.length) {
       group.rows = NS.extract.retrieveRowsFromItems?.(live, group.fields) || [];
@@ -511,6 +851,10 @@
 
   async function onWalkPages() {
     if (state.walking) return;
+    if (anyRowsDirty()) {
+      setHint("Reset edited tables from the page before walking, or Export first.");
+      return;
+    }
     const group = primaryGroup();
     const recipe = currentRecipe();
     if (!group || !recipe.fields.length || !recipe.rootSelector) {
@@ -621,58 +965,33 @@
         if (g) NS.export.exportJson(g.rows || [], groupColumns(g), "click-scrape");
       }
     });
-    overlay.querySelector("#cs-save")?.addEventListener("click", async () => {
-      const groups = state.groups.filter((g) => g.fields?.length && g.rootSelector);
-      if (!groups.length) return;
-      const primary = groups[0];
-      const recipe = {
-        id: crypto.randomUUID(),
-        name: `Recipe ${new Date().toLocaleString()}`,
-        createdAt: Date.now(),
-        pageUrl: location.href,
-        // Legacy single-table shape (first group) for older Walk / readers.
-        rootSelector: primary.rootSelector,
-        itemSelector: primary.itemSelector,
-        fields: primary.fields,
-        columnOrder: primary.columnOrder.slice(),
-        hiddenColumns: primary.hiddenColumns.slice(),
-        groups: groups.map((g) => ({
-          rootSelector: g.rootSelector,
-          itemSelector: g.itemSelector,
-          fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
-          columnOrder: g.columnOrder.slice(),
-          hiddenColumns: g.hiddenColumns.slice(),
-        })),
-      };
-      await NS.storage.saveRecipe(recipe);
-      let count = 0;
-      try {
-        const recipes = await NS.storage.listRecipes();
-        count = recipes.length;
-      } catch {
-        /* save already succeeded */
-      }
-      const fieldTotal = groups.reduce((n, g) => n + g.fields.length, 0);
-      if (NS.storage.shouldNudgeRecipes?.(count)) {
-        setHint(`Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). ${NS.storage.recipeNudgeCopy(count)}`);
-      } else {
-        setHint(`Recipe saved (${groups.length} table(s), ${fieldTotal} field(s)). Open the extension popup to re-run.`);
-      }
+    overlay.querySelector("#cs-save")?.addEventListener("click", () => {
+      persistRecipe({ quiet: false }).catch(() => {
+        setHint("Could not save recipe.");
+      });
     });
     overlay.querySelector("#cs-stop")?.addEventListener("click", stopPicker);
   }
 
-  function startPicker() {
+  function startPicker(options = {}) {
     if (state.active) return;
     state.active = true;
-    state.groups = [];
+    if (!options.preserveGroups) {
+      state.groups = [];
+      selectedByField.clear();
+      clearEditingSession();
+    }
     state.walked = false;
-    selectedByField.clear();
     bindOverlay();
+    syncSessionChrome();
+    loadUserPrefs().then(() => applyColumnView()).catch(() => {});
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown, true);
     refreshUi();
+    if (!editingRecipeId) {
+      setHint("Hover and click to add columns. Esc cancels.");
+    }
   }
 
   function stopPicker() {
@@ -685,6 +1004,15 @@
     walkController = null;
     state.active = false;
     state.walking = false;
+    if (recipePersistTimer) {
+      clearTimeout(recipePersistTimer);
+      recipePersistTimer = null;
+    }
+    if (editingRecipeId) {
+      const recipe = buildRecipeFromState();
+      if (recipe) NS.storage.saveRecipe(recipe).catch(() => {});
+    }
+    clearEditingSession();
     clearHover();
     clearRetrievedItems();
     selectedByField.clear();
@@ -698,7 +1026,29 @@
     NS.overlay.removeOverlay();
   }
 
+  globalThis.__clickScrapeTeardown = () => {
+    try {
+      stopPicker();
+    } catch {
+      /* ignore */
+    }
+    try {
+      document.getElementById("click-scrape-overlay")?.remove();
+    } catch {
+      /* ignore */
+    }
+    if (globalThis.__clickScrapeHandleMessage === handleRuntimeMessage) {
+      globalThis.__clickScrapeHandleMessage = null;
+    }
+    globalThis.__clickScrapeBoot = null;
+    globalThis.__clickScrapeLoaded = false;
+    globalThis.__clickScrapeTeardown = null;
+  };
+
   async function runRecipe(recipe) {
+    deactivatePicking();
+    attachRecipeSession(recipe);
+
     const specs =
       Array.isArray(recipe?.groups) && recipe.groups.length
         ? recipe.groups
@@ -748,15 +1098,22 @@
     highlightRetrievedItems(allItems);
     NS.overlay.ensureOverlay();
     bindOverlay();
+    await loadUserPrefs();
     applyColumnView();
+    syncSessionChrome();
     const totalRows = built.reduce((n, g) => n + (g.rows?.length || 0), 0);
     const totalFields = built.reduce((n, g) => n + (g.fields?.length || 0), 0);
     setHint(
-      `Ran saved recipe — ${built.length} table(s), ${totalFields} field(s), ${totalRows} row(s). Walk pages or Export.`
+      `Ran saved recipe — ${built.length} table(s), ${totalFields} field(s), ${totalRows} row(s). Edit recipe to add fields, or Export / Walk.`
     );
   }
 
-  chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  async function editRecipe(recipe) {
+    await runRecipe(recipe);
+    beginRecipeEdit();
+  }
+
+  function handleRuntimeMessage(msg, _sender, sendResponse) {
     if (msg?.type === "CLICK_SCRAPE_START") {
       startPicker();
       sendResponse({ ok: true });
@@ -766,11 +1123,24 @@
     } else if (msg?.type === "CLICK_SCRAPE_RUN_RECIPE") {
       runRecipe(msg.recipe);
       sendResponse({ ok: true });
+    } else if (msg?.type === "CLICK_SCRAPE_EDIT_RECIPE") {
+      editRecipe(msg.recipe);
+      sendResponse({ ok: true });
     } else if (msg?.type === "CLICK_SCRAPE_TOGGLE") {
       if (state.active) stopPicker();
       else startPicker();
       sendResponse({ ok: true, active: state.active });
     }
     return true;
-  });
+  }
+
+  // One durable listener; re-injects swap the handler instead of stacking listeners.
+  if (!globalThis.__clickScrapeMsgBound) {
+    globalThis.__clickScrapeMsgBound = true;
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      const fn = globalThis.__clickScrapeHandleMessage;
+      if (typeof fn === "function") return fn(msg, sender, sendResponse);
+    });
+  }
+  globalThis.__clickScrapeHandleMessage = handleRuntimeMessage;
 })();

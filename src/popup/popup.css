@@ -105,6 +105,20 @@ li {
   border-top: 1px solid #E5E7EB;
 }
 
+li .actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+  max-width: 148px;
+}
+
+li .actions button {
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+
 li .meta {
   flex: 1;
   min-width: 0;

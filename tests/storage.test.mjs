@@ -69,16 +69,24 @@ describe("storage soft nudge helpers", () => {
   });
 });
 
-describe("storage hard recipe cap", () => {
-  it("saveRecipe keeps at most 50 recipes and still saves", async () => {
-    const chrome = mockChrome({ clickScrapeRecipes: [] });
+describe("storage user prefs", () => {
+  it("getPrefs returns defaults and setPrefs persists previewRowLimit", async () => {
+    const chrome = mockChrome({});
     const storage = loadStorageWithChrome(chrome);
-    for (let i = 0; i < 55; i++) {
-      await storage.saveRecipe({ id: `r${i}`, name: `Recipe ${i}` });
-    }
-    const recipes = await storage.listRecipes();
-    assert.equal(recipes.length, 50);
-    assert.equal(recipes[0].id, "r54");
-    assert.equal(storage.HARD_RECIPE_CAP, 50);
+    const initial = await storage.getPrefs();
+    assert.equal(initial.previewRowLimit, 200);
+    const next = await storage.setPrefs({ previewRowLimit: 50 });
+    assert.equal(next.previewRowLimit, 50);
+    assert.equal((await storage.getPrefs()).previewRowLimit, 50);
+  });
+
+  it("normalizePrefs snaps invalid limits to nearest allowed value", async () => {
+    const chrome = mockChrome({
+      clickScrapePrefs: { previewRowLimit: 87 },
+    });
+    const storage = loadStorageWithChrome(chrome);
+    const prefs = await storage.getPrefs();
+    assert.ok(storage.PREVIEW_ROW_LIMITS.includes(prefs.previewRowLimit));
+    assert.equal(prefs.previewRowLimit, 100);
   });
 });

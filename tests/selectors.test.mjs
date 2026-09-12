@@ -327,4 +327,72 @@ describe("selectors", () => {
     assert.equal(rows[0].Price, "20");
     assert.equal(rows[0]["Discount%"], "-9%");
   });
+
+  it("cssPath skips duplicate Amazon ids so Size recipes rematch Size not Color", () => {
+    const html = loadFixture("twister-duplicate-ids.html");
+    const { window, document } = createDocument(html);
+    const CS = loadClickScrape(window);
+    assert.equal(document.querySelectorAll("#tp-inline-twister-dim-values-container").length, 2);
+    const small = document.querySelector("#size_name_0-announce");
+    const ctx = CS.selectors.findListContext(small);
+    assert.match(ctx.rootSelector, /inline-twister-expander-content-size_name/);
+    assert.doesNotMatch(
+      ctx.rootSelector,
+      /^div#tp-inline-twister-dim-values-container\b/,
+      "must not stop at duplicated twister container id"
+    );
+    const item = ctx.items.find((i) => i === small || i.contains(small));
+    const recipe = {
+      rootSelector: ctx.rootSelector,
+      itemSelector: ctx.itemSelector,
+      fields: [{ name: "Size", relativeSelector: CS.selectors.relativeSelector(item, small) }],
+    };
+    const sizes = CS.extract.retrieve(recipe).rows.map((r) => String(r.Size || "").replace(/\s+/g, " ").trim());
+    assert.equal(sizes.join("|"), "Small|Medium|Large|X-Large|XX-Large");
+    assert.ok(!sizes.includes("Red") && !sizes.includes("Blue"));
+  });
+
+  it("stepFieldTarget broadens from title span toward the card item", () => {
+    const titleEl = doc.querySelector("article.product .title");
+    const ctx = ClickScrape.selectors.findListContext(titleEl);
+    const item = ctx.items.find((i) => i.contains(titleEl));
+    assert.ok(item);
+
+    const broader = ClickScrape.selectors.stepFieldTarget(item, titleEl, "broader");
+    assert.ok(broader);
+    assert.equal(broader, titleEl.parentElement);
+    assert.ok(item.contains(broader) || broader === item);
+
+    const info = ClickScrape.selectors.fieldTargetStepInfo(item, titleEl);
+    assert.equal(info.canBroader, true);
+    assert.equal(info.canNarrower, false, "title span is a leaf");
+  });
+
+  it("stepFieldTarget narrows from title-wrap into the title span", () => {
+    const wrap = doc.querySelector("article.product .title-wrap");
+    const titleEl = doc.querySelector("article.product .title");
+    const ctx = ClickScrape.selectors.findListContext(wrap);
+    const item = ctx.items.find((i) => i.contains(wrap));
+    assert.ok(item && titleEl);
+
+    const narrower = ClickScrape.selectors.stepFieldTarget(item, wrap, "narrower");
+    assert.equal(narrower, titleEl);
+
+    const atItem = ClickScrape.selectors.stepFieldTarget(item, item, "broader");
+    assert.equal(atItem, null, "cannot broaden past the list item");
+
+    const info = ClickScrape.selectors.fieldTargetStepInfo(item, item);
+    assert.equal(info.canBroader, false);
+    assert.equal(info.canNarrower, true);
+  });
+
+  it("relativeSelector stays item-relative after a broader step", () => {
+    const titleEl = doc.querySelector("article.product .title");
+    const ctx = ClickScrape.selectors.findListContext(titleEl);
+    const item = ctx.items.find((i) => i.contains(titleEl));
+    const broader = ClickScrape.selectors.stepFieldTarget(item, titleEl, -1);
+    const rel = ClickScrape.selectors.relativeSelector(item, broader);
+    assertItemRelative(rel);
+    assert.equal(resolveRelative(item, rel), broader);
+  });
 });
