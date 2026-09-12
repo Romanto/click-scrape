@@ -78,6 +78,7 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 6. **Soft cap:** UX nudge only (never “create an account”); does not block save/walk.
 7. **No** `fetch` of scraped rows/recipes; permissions stay minimal.
 8. **List groups (multi-table preview):** each repeating list is a **group** with its own `liveItems` / fields / rows. A **nested** disjoint list under a greedy first pick **replaces** all groups. A **sibling** disjoint list **starts a new group** (own table from row 1). Same-list clicks still add columns to that group. Export concatenates groups with a blank CSV separator (JSON array of tables).
+9. **Dense list peers only:** `findListContext` must not treat page-wide `.celwidget` (or other sparse peers) as rows when the picked field rematches only one of them — fall back to a singleton host (e.g. `#corePrice_desktop`) so Price + Discount% yield one filled row, not a table of blanks.
 
 ## How to verify
 
