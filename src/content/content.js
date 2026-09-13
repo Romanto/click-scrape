@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "prefs-v1";
+  const BOOT = "lazy-scroll-v2";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -877,6 +877,21 @@
         persistPageCount,
         signal: walkController?.signal,
         columns,
+        beforeExtract: async (doc) => {
+          if (doc !== document) return null;
+          setHint("Scrolling to load items…");
+          const scraped = await NS.lazyLoad?.scrapeRecipeWhileScrolling?.(recipe, doc, {
+            signal: walkController?.signal,
+            columns,
+            onProgress: ({ rows }) => {
+              if (stale()) return;
+              group.rows = rows;
+              applyColumnView();
+              setHint(`Scrolling to load items… ${rows.length} row(s) so far`);
+            },
+          });
+          return scraped || null;
+        },
         onProgress: ({ rows, hint, done }) => {
           if (stale()) return;
           group.rows = rows;
@@ -1064,6 +1079,7 @@
 
     const built = [];
     const allItems = [];
+    setHint("Scrolling to load items…");
     for (const spec of specs) {
       const group = createGroup({
         rootSelector: spec.rootSelector || "",
@@ -1083,12 +1099,33 @@
         itemSelector: group.itemSelector,
         fields: group.fields,
       };
-      const result = NS.extract.retrieve?.(subRecipe) || {
-        items: [],
-        rows: NS.extract.extractRows(subRecipe),
-      };
-      group.rows = result.rows || [];
-      group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+      try {
+        const scraped = await NS.lazyLoad?.scrapeRecipeWhileScrolling?.(subRecipe, document);
+        if (scraped?.rows) {
+          group.rows = scraped.rows;
+          // Refresh live item handles from the final DOM state when possible.
+          const result = NS.extract.retrieve?.(subRecipe) || { items: [] };
+          group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+          // Prefer merged scroll rows (handles virtualization) over a final DOM snapshot.
+          if (!group.rows.length && result.rows) group.rows = result.rows;
+        } else {
+          await NS.lazyLoad?.revealRecipeItems?.(subRecipe, document);
+          const result = NS.extract.retrieve?.(subRecipe) || {
+            items: [],
+            rows: NS.extract.extractRows(subRecipe),
+          };
+          group.rows = result.rows || [];
+          group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+        }
+      } catch (err) {
+        if (err && err.name !== "AbortError") throw err;
+        const result = NS.extract.retrieve?.(subRecipe) || {
+          items: [],
+          rows: NS.extract.extractRows(subRecipe),
+        };
+        group.rows = result.rows || [];
+        group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+      }
       allItems.push(...group.liveItems);
       built.push(group);
     }

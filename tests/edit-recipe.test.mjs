@@ -2,8 +2,18 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { loadFixture, loadPicker } from "./helpers/load-click-scrape.mjs";
 
-async function flush() {
-  await new Promise((r) => setImmediate(r));
+async function flush(predicate, timeoutMs = 3000) {
+  const start = Date.now();
+  for (;;) {
+    await new Promise((r) => setImmediate(r));
+    if (typeof predicate === "function") {
+      if (predicate()) return;
+    } else {
+      return;
+    }
+    if (Date.now() - start > timeoutMs) return;
+    await new Promise((r) => setTimeout(r, 25));
+  }
 }
 
 describe("editable saved recipes", () => {
@@ -49,7 +59,7 @@ describe("editable saved recipes", () => {
     assert.equal(document.getElementById("click-scrape-overlay"), null);
 
     send("CLICK_SCRAPE_EDIT_RECIPE", { recipe: recipes[0] });
-    await flush();
+    await flush(() => document.getElementById("click-scrape-overlay"));
 
     assert.ok(document.getElementById("click-scrape-overlay"), "edit opens overlay");
     assert.equal(document.querySelector("#cs-save").textContent, "Update recipe");
@@ -86,7 +96,7 @@ describe("editable saved recipes", () => {
     fire(document.querySelector("#cs-stop"), "click");
 
     send("CLICK_SCRAPE_RUN_RECIPE", { recipe });
-    await flush();
+    await flush(() => document.getElementById("click-scrape-overlay") && document.querySelector("#cs-save"));
 
     assert.equal(document.querySelector("#cs-save").textContent, "Update recipe");
     assert.equal(document.querySelector("#cs-edit-recipe")?.hidden, false, "Edit recipe after Run");
@@ -120,7 +130,11 @@ describe("editable saved recipes", () => {
     fire(document.querySelector("#cs-stop"), "click");
 
     send("CLICK_SCRAPE_EDIT_RECIPE", { recipe });
-    await flush();
+    await flush(
+      () =>
+        document.getElementById("click-scrape-overlay") &&
+        document.querySelectorAll("#cs-preview .cs-preview-table").length >= 1
+    );
     assert.equal(document.querySelectorAll("#cs-preview .cs-preview-table").length, 1);
 
     pick(ask);

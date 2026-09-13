@@ -6,6 +6,7 @@ const CONTENT_FILES = [
   "src/shared/pagination.js",
   "src/shared/columns.js",
   "src/shared/rows.js",
+  "src/shared/lazy-load.js",
   "src/content/picker-overlay.js",
   "src/content/content.js",
 ];

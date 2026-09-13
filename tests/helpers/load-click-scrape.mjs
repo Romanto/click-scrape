@@ -15,6 +15,7 @@ const MODULES = [
   "columns.js",
   "rows.js",
   "storage.js",
+  "lazy-load.js",
 ];
 const PICKER_FILES = [
   "src/shared/selectors.js",
@@ -24,6 +25,7 @@ const PICKER_FILES = [
   "src/shared/pagination.js",
   "src/shared/columns.js",
   "src/shared/rows.js",
+  "src/shared/lazy-load.js",
   "src/content/picker-overlay.js",
   "src/content/content.js",
 ];
@@ -58,11 +60,17 @@ export function loadClickScrape(window, options = {}) {
     Node: window.Node,
     CSS: { escape: cssEscape },
     Blob: BlobClass,
+    setTimeout,
+    clearTimeout,
     URL: {
       createObjectURL: () => "blob:test",
       revokeObjectURL: () => {},
     },
   };
+
+  // Ensure timers are visible on the sandbox globalThis used by IIFEs.
+  window.setTimeout = setTimeout;
+  window.clearTimeout = clearTimeout;
 
   window.ClickScrape = undefined;
 
@@ -114,6 +122,8 @@ export function loadPicker(html, options = {}) {
     Node: window.Node,
     HTMLElement: window.HTMLElement,
     CSS: { escape: cssEscape },
+    setTimeout,
+    clearTimeout,
     location: { href: options.locationHref || "http://127.0.0.1:8765/demo.html" },
     crypto: {
       randomUUID: () => (typeof options.randomUUID === "function" ? options.randomUUID() : "test-id"),
@@ -130,6 +140,8 @@ export function loadPicker(html, options = {}) {
       storage: chromeStorage,
     },
   };
+  window.setTimeout = setTimeout;
+  window.clearTimeout = clearTimeout;
   sandbox.globalThis = sandbox;
   window.document = document;
 

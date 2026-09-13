@@ -249,16 +249,25 @@
     const onProgress = options.onProgress;
     const persistPageCount = options.persistPageCount;
     const signal = options.signal;
+    const aborted = () => !!(signal && signal.aborted);
 
     let url = options.currentUrl || "";
     let doc = startDoc;
-    let rows = mergeRows([], extractRows ? extractRows(recipe, doc) : [], columns);
+    let preparedRows = null;
+    if (!aborted() && typeof options.beforeExtract === "function") {
+      const prep = await options.beforeExtract(doc, { page: 1, url });
+      if (prep && Array.isArray(prep.rows)) preparedRows = prep.rows;
+    }
+    let rows = mergeRows(
+      [],
+      preparedRows || (extractRows ? extractRows(recipe, doc) : []),
+      columns
+    );
     let pages = 1;
     let hint = "Pagination in progress…";
     const visited = new Set();
     if (url) visited.add(normalizeUrl(url));
 
-    const aborted = () => !!(signal && signal.aborted);
     const emit = (payload) => {
       if (aborted()) return;
       onProgress?.(payload);
