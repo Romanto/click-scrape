@@ -17,6 +17,7 @@ Chrome MV3, **zero-build vanilla JS**. Scripts inject at runtime via the service
 | `src/shared/rows.js` | Preview row edit helpers | `updateCell` / `addRow` / `removeRow` / dirty merge |
 | `src/shared/pagination.js` | `findNextUrl`, `mergeRows`, `walkPages` | Same-origin GET of next HTML only; optional `beforeExtract` for live-doc settle |
 | `src/shared/lazy-load.js` | `scrollToRevealItems`, `revealRecipeItems` | Scroll list scrollport until item count stabilizes (Run / Walk page 1) |
+| `src/shared/highlight.js` | Hover target stabilize + box geometry | Floating picker highlight helpers |
 | `src/shared/export.js` | CSV/JSON Blob download | `exportJson(rows, columns\|baseName, baseName?)` |
 | `src/shared/storage.js` | Recipes + soft-nudge helpers | Hard cap 50; soft nudge 10 recipes / 5 pages |
 | `src/content/content.js` | Picker state, overlay bind, walk, handlers | Owns recipe session; injects Walk button |
@@ -31,11 +32,11 @@ Chrome MV3, **zero-build vanilla JS**. Scripts inject at runtime via the service
 
 ```js
 globalThis.ClickScrape = {
-  selectors, extract, export, storage, pagination, columns, rows, lazyLoad, overlay
+  selectors, extract, export, storage, pagination, columns, rows, lazyLoad, highlight, overlay
 }
 ```
 
-Service worker `CONTENT_FILES` order matters — shared modules (including `rows.js`) before `picker-overlay.js` before `content.js`.
+Service worker `CONTENT_FILES` order matters — shared modules (including `rows.js`, `highlight.js`) before `picker-overlay.js` before `content.js`.
 
 ## Similar-peer hover (PR #5 / post-MVP)
 
@@ -55,9 +56,10 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 
 ### Wiring (`src/content/content.js` + `highlighter.css`)
 
-- `onMouseMove` → `findSimilarPeers(el)` → add `.click-scrape-similar` (dashed outline).
-- Clear similar hints with hover clear and on stop.
-- Do **not** put scrape logic in CSS; do **not** let similar classes leak into saved selectors (already filtered).
+- Hover visuals use a **floating** `#click-scrape-highlight-layer` box (smooth geometry), not outline classes on the host node.
+- `onMouseMove` (rAF) → `highlight.stabilizeHoverTarget` (resist parent thrash) → place hover box → **debounced** `findSimilarPeers` as dashed similar boxes.
+- Clear hover/similar boxes with hover clear and on stop; resync geometry on scroll/resize.
+- Do **not** put scrape logic in CSS; do **not** let similar/highlight classes leak into saved selectors (already filtered).
 
 ### Tests
 

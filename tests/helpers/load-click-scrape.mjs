@@ -16,6 +16,7 @@ const MODULES = [
   "rows.js",
   "storage.js",
   "lazy-load.js",
+  "highlight.js",
 ];
 const PICKER_FILES = [
   "src/shared/selectors.js",
@@ -26,6 +27,7 @@ const PICKER_FILES = [
   "src/shared/columns.js",
   "src/shared/rows.js",
   "src/shared/lazy-load.js",
+  "src/shared/highlight.js",
   "src/content/picker-overlay.js",
   "src/content/content.js",
 ];
@@ -62,6 +64,11 @@ export function loadClickScrape(window, options = {}) {
     Blob: BlobClass,
     setTimeout,
     clearTimeout,
+    requestAnimationFrame: (cb) => {
+      cb(0);
+      return 1;
+    },
+    cancelAnimationFrame: () => {},
     URL: {
       createObjectURL: () => "blob:test",
       revokeObjectURL: () => {},
@@ -71,6 +78,8 @@ export function loadClickScrape(window, options = {}) {
   // Ensure timers are visible on the sandbox globalThis used by IIFEs.
   window.setTimeout = setTimeout;
   window.clearTimeout = clearTimeout;
+  window.requestAnimationFrame = sandbox.requestAnimationFrame;
+  window.cancelAnimationFrame = sandbox.cancelAnimationFrame;
 
   window.ClickScrape = undefined;
 
@@ -124,6 +133,11 @@ export function loadPicker(html, options = {}) {
     CSS: { escape: cssEscape },
     setTimeout,
     clearTimeout,
+    requestAnimationFrame: (cb) => {
+      cb(0);
+      return 1;
+    },
+    cancelAnimationFrame: () => {},
     location: { href: options.locationHref || "http://127.0.0.1:8765/demo.html" },
     crypto: {
       randomUUID: () => (typeof options.randomUUID === "function" ? options.randomUUID() : "test-id"),
@@ -142,6 +156,8 @@ export function loadPicker(html, options = {}) {
   };
   window.setTimeout = setTimeout;
   window.clearTimeout = clearTimeout;
+  window.requestAnimationFrame = sandbox.requestAnimationFrame;
+  window.cancelAnimationFrame = sandbox.cancelAnimationFrame;
   sandbox.globalThis = sandbox;
   window.document = document;
 

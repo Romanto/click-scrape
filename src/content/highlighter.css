@@ -1,14 +1,61 @@
-.click-scrape-hover {
-  outline: 3px solid #9D58E3 !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 1px #fff, 0 0 0 5px rgba(157, 88, 227, 0.45) !important;
+/* Picking cursor — hover ring is a floating box, not an outline on the host node */
+html.click-scrape-picking,
+html.click-scrape-picking * {
   cursor: crosshair !important;
 }
 
-.click-scrape-similar {
-  outline: 2px dashed #9D58E3 !important;
-  outline-offset: 1px !important;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 4px rgba(157, 88, 227, 0.4) !important;
+html.click-scrape-picking #click-scrape-overlay,
+html.click-scrape-picking #click-scrape-overlay * {
+  cursor: auto !important;
+}
+
+#click-scrape-highlight-layer {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none !important;
+  z-index: 2147483645 !important;
+  overflow: hidden !important;
+}
+
+.click-scrape-hover-box,
+.click-scrape-similar-box {
+  position: fixed !important;
+  box-sizing: border-box !important;
+  pointer-events: none !important;
+  border-radius: 4px !important;
+  /* left/top/width/height come from inline styles (must not use !important defaults) */
+  will-change: left, top, width, height !important;
+  transition:
+    left 0.1s ease-out,
+    top 0.1s ease-out,
+    width 0.1s ease-out,
+    height 0.1s ease-out,
+    opacity 0.12s ease !important;
+}
+
+.click-scrape-hover-box.cs-no-motion,
+.click-scrape-similar-box.cs-no-motion {
+  transition: none !important;
+}
+
+.click-scrape-hover-box {
+  border: 3px solid #9D58E3 !important;
+  box-shadow: 0 0 0 1px #fff, 0 0 0 5px rgba(157, 88, 227, 0.45) !important;
+  background: transparent !important;
+}
+
+.click-scrape-similar-box {
+  border: 2px dashed #9D58E3 !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7), 0 0 4px rgba(157, 88, 227, 0.35) !important;
+  background: transparent !important;
+  opacity: 0.95 !important;
+}
+
+/* Legacy class hooks — hover/similar visuals use floating boxes above */
+.click-scrape-hover {
+  cursor: crosshair !important;
 }
 
 .click-scrape-item {

@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "narrow-anchor-v1";
+  const BOOT = "smooth-hover-v2";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -14,6 +14,8 @@
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
 
   /** @typedef {{ name?: string, rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
+
+  const SIMILAR_DEBOUNCE_MS = 70;
 
   let state = {
     active: false,
@@ -31,6 +33,8 @@
   let pickScrollGeneration = 0;
   /** @type {Element[]} */
   let similarHintNodes = [];
+  /** @type {HTMLElement[]} */
+  let similarBoxes = [];
   /** @type {Element[]} */
   let retrievedItemNodes = [];
   /** @type {Map<string, Set<Element>>} key = `${groupIndex}::${fieldName}` */
@@ -40,6 +44,15 @@
   /** @type {{ name?: string, createdAt?: number } | null} */
   let editingRecipeMeta = null;
   let recipePersistTimer = null;
+  /** @type {HTMLElement | null} */
+  let highlightLayer = null;
+  /** @type {HTMLElement | null} */
+  let hoverBox = null;
+  let hoverBoxShown = false;
+  let hoverRaf = 0;
+  /** @type {{ x: number, y: number } | null} */
+  let pendingHoverPoint = null;
+  let similarTimer = 0;
 
   function fieldKey(groupIndex, name) {
     return `${groupIndex}::${name}`;
@@ -58,10 +71,18 @@
   }
 
   function clearSimilarHints() {
+    if (similarTimer) {
+      clearTimeout(similarTimer);
+      similarTimer = 0;
+    }
     similarHintNodes.forEach((node) => {
       node?.classList?.remove("click-scrape-similar");
     });
     similarHintNodes = [];
+    for (const box of similarBoxes) {
+      box?.remove?.();
+    }
+    similarBoxes = [];
   }
 
   function clearRetrievedItems() {
@@ -69,6 +90,80 @@
       node?.classList?.remove("click-scrape-item");
     });
     retrievedItemNodes = [];
+  }
+
+  function ensureHighlightLayer() {
+    if (highlightLayer?.isConnected && hoverBox?.isConnected) return highlightLayer;
+    highlightLayer = document.getElementById("click-scrape-highlight-layer");
+    if (!highlightLayer) {
+      highlightLayer = document.createElement("div");
+      highlightLayer.id = "click-scrape-highlight-layer";
+      document.documentElement.appendChild(highlightLayer);
+    }
+    hoverBox = highlightLayer.querySelector(".click-scrape-hover-box");
+    if (!hoverBox) {
+      hoverBox = document.createElement("div");
+      hoverBox.className = "click-scrape-hover-box";
+      hoverBox.hidden = true;
+      highlightLayer.appendChild(hoverBox);
+    }
+    return highlightLayer;
+  }
+
+  function removeHighlightLayer() {
+    clearSimilarHints();
+    hoverBoxShown = false;
+    hoverBox = null;
+    highlightLayer?.remove?.();
+    highlightLayer = null;
+    document.getElementById("click-scrape-highlight-layer")?.remove?.();
+  }
+
+  function placeHoverBox(el, animate) {
+    if (!(el instanceof Element)) return;
+    ensureHighlightLayer();
+    const hl = NS.highlight;
+    const style = hl?.boxStyleFromRect?.(el.getBoundingClientRect(), 2);
+    if (!style || !hoverBox) return;
+    const useMotion = animate && hoverBoxShown;
+    hl.applyBoxStyle(hoverBox, style, { animate: useMotion });
+    hoverBoxShown = true;
+  }
+
+  function hideHoverBox() {
+    if (hoverBox) {
+      hoverBox.hidden = true;
+      hoverBox.classList?.add?.("cs-no-motion");
+    }
+    hoverBoxShown = false;
+  }
+
+  function syncHighlightGeometry(animate) {
+    if (!state.hoverEl?.isConnected) return;
+    placeHoverBox(state.hoverEl, animate);
+    if (!similarHintNodes.length || !similarBoxes.length) return;
+    const hl = NS.highlight;
+    for (let i = 0; i < similarHintNodes.length; i += 1) {
+      const node = similarHintNodes[i];
+      const box = similarBoxes[i];
+      if (!node?.isConnected || !box) continue;
+      const style = hl?.boxStyleFromRect?.(node.getBoundingClientRect(), 1);
+      if (style) hl.applyBoxStyle(box, style, { animate: false });
+    }
+  }
+
+  function scheduleSimilarHints(el) {
+    if (similarTimer) clearTimeout(similarTimer);
+    similarTimer = setTimeout(() => {
+      similarTimer = 0;
+      if (!state.active || state.hoverEl !== el) return;
+      applySimilarHints(NS.selectors.findSimilarPeers?.(el) || []);
+    }, SIMILAR_DEBOUNCE_MS);
+  }
+
+  function onViewportChange() {
+    if (!state.active || !state.hoverEl) return;
+    syncHighlightGeometry(false);
   }
 
   function createGroup(ctx) {
@@ -147,31 +242,93 @@
     }
   }
 
+  function scheduleHoverFrame(cb) {
+    const raf = globalThis.requestAnimationFrame;
+    if (typeof raf === "function") return raf.call(globalThis, cb);
+    cb();
+    return 0;
+  }
+
+  function cancelHoverFrame(id) {
+    const caf = globalThis.cancelAnimationFrame;
+    if (typeof caf === "function") {
+      caf.call(globalThis, id);
+      return;
+    }
+    if (id) clearTimeout(id);
+  }
+
   function applySimilarHints(peers) {
-    clearSimilarHints();
+    // Clear prior peer boxes only (keep any pending schedule owned by caller).
+    for (const box of similarBoxes) {
+      box?.remove?.();
+    }
+    similarBoxes = [];
+    similarHintNodes.forEach((node) => {
+      node?.classList?.remove("click-scrape-similar");
+    });
+    similarHintNodes = [];
+
+    const layer = ensureHighlightLayer();
+    const hl = NS.highlight;
     for (const el of peers || []) {
       if (!(el instanceof Element) || el === state.hoverEl) continue;
       if (el.classList.contains("click-scrape-item")) continue;
-      el.classList.add("click-scrape-similar");
       similarHintNodes.push(el);
+      const box = document.createElement("div");
+      box.className = "click-scrape-similar-box";
+      const style = hl?.boxStyleFromRect?.(el.getBoundingClientRect(), 1);
+      if (style) hl.applyBoxStyle(box, style, { animate: false });
+      layer.appendChild(box);
+      similarBoxes.push(box);
     }
   }
 
   function clearHover() {
-    state.hoverEl?.classList.remove("click-scrape-hover");
+    if (hoverRaf) {
+      cancelHoverFrame(hoverRaf);
+      hoverRaf = 0;
+    }
+    pendingHoverPoint = null;
     state.hoverEl = null;
+    hideHoverBox();
     clearSimilarHints();
+  }
+
+  function processHoverPoint(clientX, clientY) {
+    const raw = document.elementFromPoint(clientX, clientY);
+    if (!raw || isOverlay(raw)) {
+      if (state.hoverEl) clearHover();
+      return;
+    }
+    const stabilize = NS.highlight?.stabilizeHoverTarget;
+    const el = stabilize ? stabilize(state.hoverEl, raw, clientX, clientY) : raw;
+    if (!el || el === state.hoverEl) {
+      if (el === state.hoverEl && el) placeHoverBox(el, true);
+      return;
+    }
+    const prev = state.hoverEl;
+    state.hoverEl = el;
+    placeHoverBox(el, !!prev);
+    clearSimilarHints();
+    scheduleSimilarHints(el);
   }
 
   function onMouseMove(e) {
     if (!state.active || isOverlayEvent(e)) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || el === state.hoverEl || isOverlay(el)) return;
-    clearHover();
-    state.hoverEl = el;
-    el.classList.add("click-scrape-hover");
-    const peers = NS.selectors.findSimilarPeers?.(el) || [];
-    applySimilarHints(peers);
+    pendingHoverPoint = { x: e.clientX, y: e.clientY };
+    if (hoverRaf) return;
+    let ranSync = false;
+    hoverRaf = scheduleHoverFrame(() => {
+      ranSync = true;
+      hoverRaf = 0;
+      const point = pendingHoverPoint;
+      pendingHoverPoint = null;
+      if (!point || !state.active) return;
+      processHoverPoint(point.x, point.y);
+    });
+    // Sync rAF polyfills (tests) finish before the id is assigned — don't stick a stale handle.
+    if (ranSync) hoverRaf = 0;
   }
 
   function findFieldForClick(el, item, group) {
@@ -1153,9 +1310,13 @@
     bindOverlay();
     syncSessionChrome();
     loadUserPrefs().then(() => applyColumnView()).catch(() => {});
+    document.documentElement.classList.add("click-scrape-picking");
+    ensureHighlightLayer();
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onViewportChange, true);
     refreshUi();
     if (!editingRecipeId) {
       setHint("Hover and click to add columns. Esc cancels.");
@@ -1189,9 +1350,13 @@
     document.querySelectorAll(".click-scrape-similar").forEach((el) => el.classList.remove("click-scrape-similar"));
     document.querySelectorAll(".click-scrape-item").forEach((el) => el.classList.remove("click-scrape-item"));
     similarHintNodes = [];
+    document.documentElement.classList.remove("click-scrape-picking");
+    removeHighlightLayer();
     document.removeEventListener("mousemove", onMouseMove, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
+    window.removeEventListener("scroll", onViewportChange, true);
+    window.removeEventListener("resize", onViewportChange, true);
     NS.overlay.removeOverlay();
   }
 
