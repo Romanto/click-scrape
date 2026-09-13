@@ -38,13 +38,13 @@
     return parts.join("\n");
   }
 
-  /** Multiple tables → JSON array of { columns, rows } (projected). */
+  /** Multiple tables → JSON array of { name?, columns, rows } (projected). */
   function toJsonTables(tables) {
     const list = Array.isArray(tables) ? tables : [];
     const out = list.map((table) => {
       const cols = Array.isArray(table?.columns) ? table.columns : [];
       const rows = Array.isArray(table?.rows) ? table.rows : [];
-      return {
+      const entry = {
         columns: cols.slice(),
         rows: cols.length
           ? rows.map((row) => {
@@ -54,6 +54,9 @@
             })
           : rows.slice(),
       };
+      const name = String(table?.name || "").trim();
+      if (name) entry.name = name;
+      return entry;
     });
     return JSON.stringify(out, null, 2);
   }

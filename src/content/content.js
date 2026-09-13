@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "lazy-scroll-v2";
+  const BOOT = "narrow-anchor-v1";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -13,7 +13,7 @@
 
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
 
-  /** @typedef {{ rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
+  /** @typedef {{ name?: string, rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
 
   let state = {
     active: false,
@@ -26,6 +26,9 @@
 
   let walkController = null;
   let walkGeneration = 0;
+  /** @type {AbortController | null} */
+  let pickScrollController = null;
+  let pickScrollGeneration = 0;
   /** @type {Element[]} */
   let similarHintNodes = [];
   /** @type {Element[]} */
@@ -70,6 +73,7 @@
 
   function createGroup(ctx) {
     return {
+      name: "",
       rootSelector: ctx?.rootSelector || "",
       itemSelector: ctx?.itemSelector || "*",
       fields: [],
@@ -326,6 +330,10 @@
       picked.fields.find((f) => f.relativeSelector === rel)?.name ||
       picked.fields[picked.fields.length - 1]?.name ||
       name;
+    const stored = group.fields.find((f) => f.name === fieldName);
+    if (stored && !stored.anchorRelativeSelector) {
+      stored.anchorRelativeSelector = stored.relativeSelector;
+    }
     markFieldSelected(groupIndex, fieldName, el);
     if (nameInput) nameInput.value = "";
     if (group.rowsDirty) {
@@ -336,6 +344,8 @@
       applyColumnView();
     } else {
       refreshUi();
+      // Load lazy/infinite peers so preview + outlines grow beyond the first viewport.
+      expandGroupByScrolling(group);
     }
   }
 
@@ -360,12 +370,16 @@
 
   function getPreviewTables() {
     return state.groups
-      .map((group, groupIndex) => ({
-        groupIndex,
-        columns: groupColumns(group),
-        rows: Array.isArray(group.rows) ? group.rows : [],
-        rowsDirty: !!group.rowsDirty,
-      }))
+      .map((group, groupIndex) => {
+        const name = String(group.name || "").trim();
+        return {
+          groupIndex,
+          name,
+          columns: groupColumns(group),
+          rows: Array.isArray(group.rows) ? group.rows : [],
+          rowsDirty: !!group.rowsDirty,
+        };
+      })
       .filter((t) => t.columns.length);
   }
 
@@ -391,7 +405,16 @@
     if (!(el instanceof Element)) {
       return { sample: "", canBroader: false, canNarrower: false };
     }
-    const info = NS.selectors.fieldTargetStepInfo?.(item, el) || {};
+    let anchor = null;
+    if (field.anchorRelativeSelector) {
+      try {
+        anchor = NS.extract.queryField?.(item, field.anchorRelativeSelector);
+      } catch {
+        anchor = null;
+      }
+    }
+    if (!(anchor instanceof Element) || !item.contains(anchor)) anchor = el;
+    const info = NS.selectors.fieldTargetStepInfo?.(item, el, { anchor }) || {};
     const sample = String(el.textContent || "")
       .replace(/\s+/g, " ")
       .trim()
@@ -458,6 +481,26 @@
     applyColumnView();
   }
 
+  function onRenameTable(groupIndex, nextName) {
+    if (state.walking) return;
+    const gi = Number(groupIndex);
+    if (!Number.isFinite(gi) || !state.groups[gi]) return;
+    const group = state.groups[gi];
+    const trimmed = String(nextName || "").trim();
+    if (!trimmed) {
+      group.name = "";
+      applyColumnView();
+      if (editingRecipeId) scheduleRecipePersist();
+      return;
+    }
+    const used = state.groups
+      .map((g, i) => (i === gi ? "" : String(g.name || "").trim()))
+      .filter(Boolean);
+    group.name = NS.columns.uniqueName(trimmed, used);
+    applyColumnView();
+    if (editingRecipeId) scheduleRecipePersist();
+  }
+
   function onDrop(name, groupIndex) {
     if (state.walking) return;
     const gi = findGroupIndexForFieldName(name, groupIndex);
@@ -509,12 +552,33 @@
       current = null;
     }
     if (!(current instanceof Element)) return;
-    const next = NS.selectors.stepFieldTarget?.(item, current, dir);
+
+    // Anchor = original (or last) leaf so Broader → Narrower can return to the price,
+    // not drift into a longer sibling branch like the title.
+    if (!field.anchorRelativeSelector) field.anchorRelativeSelector = field.relativeSelector;
+    let anchor = null;
+    try {
+      anchor = NS.extract.queryField?.(item, field.anchorRelativeSelector);
+    } catch {
+      anchor = null;
+    }
+    if (!(anchor instanceof Element) || !item.contains(anchor)) {
+      anchor = current;
+      field.anchorRelativeSelector = field.relativeSelector;
+    }
+
+    const next = NS.selectors.stepFieldTarget?.(item, current, dir, { anchor });
     if (!(next instanceof Element) || next === current) return;
 
     const oldRel = field.relativeSelector;
     clearFieldOutlines(gi, name, oldRel);
     field.relativeSelector = NS.selectors.relativeSelector(item, next);
+    // If Narrower leaves the old anchor branch, retarget the anchor to the new leaf tip.
+    if (dir > 0 && !(next === anchor || next.contains(anchor))) {
+      const tipLadder = NS.selectors.fieldTargetLadder?.(item, next, { anchor: next }) || [];
+      const tip = tipLadder[tipLadder.length - 1] || next;
+      field.anchorRelativeSelector = NS.selectors.relativeSelector(item, tip);
+    }
     if (!group.sampleItem?.isConnected) group.sampleItem = item;
     markFieldSelected(gi, name, next);
 
@@ -592,6 +656,7 @@
     NS.overlay.setSessionHandlers?.({
       onEditRecipe: beginRecipeEdit,
       onPreviewRowLimit: onPreviewRowLimit,
+      onRenameTable,
     });
     syncSessionChrome();
   }
@@ -635,13 +700,24 @@
       fields: primary.fields,
       columnOrder: primary.columnOrder.slice(),
       hiddenColumns: primary.hiddenColumns.slice(),
-      groups: groups.map((g) => ({
-        rootSelector: g.rootSelector,
-        itemSelector: g.itemSelector,
-        fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
-        columnOrder: g.columnOrder.slice(),
-        hiddenColumns: g.hiddenColumns.slice(),
-      })),
+      groups: groups.map((g) => {
+        const entry = {
+          rootSelector: g.rootSelector,
+          itemSelector: g.itemSelector,
+          fields: g.fields.map((f) => {
+            const entry = { name: f.name, relativeSelector: f.relativeSelector };
+            if (f.anchorRelativeSelector && f.anchorRelativeSelector !== f.relativeSelector) {
+              entry.anchorRelativeSelector = f.anchorRelativeSelector;
+            }
+            return entry;
+          }),
+          columnOrder: g.columnOrder.slice(),
+          hiddenColumns: g.hiddenColumns.slice(),
+        };
+        const n = String(g.name || "").trim();
+        if (n) entry.name = n;
+        return entry;
+      }),
     };
   }
 
@@ -715,6 +791,7 @@
   }
 
   function deactivatePicking() {
+    abortPickScroll();
     if (!state.active) return;
     state.active = false;
     document.removeEventListener("mousemove", onMouseMove, true);
@@ -772,6 +849,81 @@
     );
     applyColumnView();
     setHint("Table reset from the page.");
+    expandGroupByScrolling(group);
+  }
+
+  function abortPickScroll() {
+    pickScrollGeneration += 1;
+    try {
+      pickScrollController?.abort();
+    } catch {
+      /* ignore */
+    }
+    pickScrollController = null;
+  }
+
+  /**
+   * While picking: scroll the list and merge rows so the preview fills beyond the viewport.
+   * Fire-and-forget; aborted on Stop / Walk / a newer pick-scroll.
+   */
+  async function expandGroupByScrolling(group) {
+    if (!state.active || state.walking || !group || group.rowsDirty) return;
+    if (!group.fields?.length || !group.rootSelector) return;
+    if (typeof NS.lazyLoad?.scrapeRecipeWhileScrolling !== "function") return;
+
+    const gen = ++pickScrollGeneration;
+    try {
+      pickScrollController?.abort();
+    } catch {
+      /* ignore */
+    }
+    pickScrollController =
+      typeof AbortController === "function" ? new AbortController() : null;
+
+    const recipe = {
+      rootSelector: group.rootSelector,
+      itemSelector: group.itemSelector || "*",
+      fields: group.fields,
+    };
+    const columns = groupColumns(group);
+    const beforeCount = Array.isArray(group.rows) ? group.rows.length : 0;
+    setHint("Scrolling to load more items…");
+
+    try {
+      const scraped = await NS.lazyLoad.scrapeRecipeWhileScrolling(recipe, document, {
+        signal: pickScrollController?.signal,
+        columns,
+        onProgress: ({ rows }) => {
+          if (gen !== pickScrollGeneration || group.rowsDirty || !state.active) return;
+          group.rows = rows;
+          applyColumnView();
+          setHint(`Scrolling to load more items… ${rows.length} row(s)`);
+        },
+      });
+      if (gen !== pickScrollGeneration || !state.active || group.rowsDirty) return;
+
+      if (scraped?.rows) group.rows = scraped.rows;
+      const items = NS.extract.retrieveItems?.(recipe) || [];
+      if (items.length) {
+        group.liveItems = items.filter((n) => n?.nodeType === 1);
+      }
+      highlightRetrievedItems(
+        state.groups.flatMap((g) => (g.fields.length ? outlineItemsForGroup(g) : []))
+      );
+      applyColumnView();
+      const n = group.rows?.length || 0;
+      if (n > beforeCount) {
+        setHint(`Loaded ${n} row(s). Click to add columns, or Export / Walk.`);
+      } else {
+        setHint(`${n} row(s). Click to add columns, or Export / Walk.`);
+      }
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      if (gen !== pickScrollGeneration) return;
+      setHint("Could not load more items by scrolling. Export or Walk with what you have.");
+    } finally {
+      if (gen === pickScrollGeneration) pickScrollController = null;
+    }
   }
 
   function mergeFieldIntoDirtyGroup(group, fieldName) {
@@ -851,6 +1003,7 @@
 
   async function onWalkPages() {
     if (state.walking) return;
+    abortPickScroll();
     if (anyRowsDirty()) {
       setHint("Reset edited tables from the page before walking, or Export first.");
       return;
@@ -1011,6 +1164,7 @@
 
   function stopPicker() {
     walkGeneration += 1;
+    abortPickScroll();
     try {
       walkController?.abort();
     } catch {
@@ -1086,10 +1240,16 @@
         itemSelector: spec.itemSelector || "*",
         items: [],
       });
-      group.fields = (spec.fields || []).map((f) => ({
-        name: f.name,
-        relativeSelector: f.relativeSelector,
-      }));
+      group.fields = (spec.fields || []).map((f) => {
+        const entry = {
+          name: f.name,
+          relativeSelector: f.relativeSelector,
+        };
+        if (f.anchorRelativeSelector) entry.anchorRelativeSelector = f.anchorRelativeSelector;
+        else entry.anchorRelativeSelector = f.relativeSelector;
+        return entry;
+      });
+      group.name = String(spec.name || "").trim();
       group.columnOrder = Array.isArray(spec.columnOrder)
         ? spec.columnOrder.slice()
         : group.fields.map((f) => f.name);
