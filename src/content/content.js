@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "smooth-hover-v2";
+  const BOOT = "narrow-anchor-v4";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
