@@ -752,10 +752,27 @@
   }
 
   /**
-   * Ladder from list item → current field → preferred descendants (max ~8).
+   * Path from `root` down to `leaf` (inclusive), or [] if leaf is not under root.
+   */
+  function pathFromTo(root, leaf) {
+    if (!(root instanceof Element) || !(leaf instanceof Element)) return [];
+    if (root === leaf) return [root];
+    if (!root.contains(leaf)) return [];
+    const down = [];
+    let node = leaf;
+    while (node && node !== root) {
+      down.unshift(node);
+      node = node.parentElement;
+    }
+    if (node !== root) return [];
+    return [root, ...down];
+  }
+
+  /**
+   * Ladder from list item → current field → preferred / anchored descendants.
    * Used for Broader / Narrower nesting adjust.
-   * When `options.anchor` is a descendant of the current node, Narrower follows
-   * that path (so Broader → Narrower returns to the picked price, not a title).
+   * When `options.anchor` is set, the ladder is the **full** item→anchor path
+   * (no depth cap) so Narrower can always return to the picked leaf on deep cards.
    */
   function fieldTargetLadder(item, currentEl, options = {}) {
     const maxLen = Math.max(2, Number(options.maxLength) || 8);
@@ -763,7 +780,33 @@
     if (item !== currentEl && !item.contains(currentEl)) return [];
 
     const anchor =
-      options.anchor instanceof Element && item.contains(options.anchor) ? options.anchor : null;
+      options.anchor instanceof Element &&
+      item.contains(options.anchor) &&
+      options.anchor !== item
+        ? options.anchor
+        : null;
+
+    // Anchored: full path item → … → anchor. Current must lie on that path.
+    if (anchor) {
+      const full = pathFromTo(item, anchor);
+      if (full.includes(currentEl)) return full;
+      // Current left the original branch — build through current, then toward tip.
+      const throughCurrent = pathFromTo(item, currentEl);
+      if (!throughCurrent.length) return [];
+      if (currentEl.contains(anchor)) {
+        const rest = pathFromTo(currentEl, anchor).slice(1);
+        return throughCurrent.concat(rest);
+      }
+      let tip = currentEl;
+      const chain = throughCurrent.slice();
+      while (chain.length < Math.max(maxLen, throughCurrent.length + 6)) {
+        const child = preferredNarrowChild(tip, null);
+        if (!child || chain.includes(child)) break;
+        chain.push(child);
+        tip = child;
+      }
+      return chain;
+    }
 
     const between = [];
     let node = currentEl;
@@ -776,7 +819,7 @@
     const chain = [item, ...between];
     let tip = currentEl;
     while (chain.length < maxLen) {
-      const child = preferredNarrowChild(tip, anchor);
+      const child = preferredNarrowChild(tip, null);
       if (!child || chain.includes(child)) break;
       chain.push(child);
       tip = child;

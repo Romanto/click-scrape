@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "narrow-anchor-v4";
+  const BOOT = "narrow-anchor-v5";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -488,8 +488,10 @@
       picked.fields[picked.fields.length - 1]?.name ||
       name;
     const stored = group.fields.find((f) => f.name === fieldName);
-    if (stored && !stored.anchorRelativeSelector) {
-      stored.anchorRelativeSelector = stored.relativeSelector;
+    if (stored) {
+      if (!stored.anchorRelativeSelector) stored.anchorRelativeSelector = stored.relativeSelector;
+      stored._anchorEl = el;
+      stored._targetEl = el;
     }
     markFieldSelected(groupIndex, fieldName, el);
     if (nameInput) nameInput.value = "";
@@ -553,24 +555,36 @@
     if (!item || !field?.relativeSelector) {
       return { sample: "", canBroader: false, canNarrower: false };
     }
-    let el = null;
-    try {
-      el = NS.extract.queryField?.(item, field.relativeSelector);
-    } catch {
-      el = null;
-    }
-    if (!(el instanceof Element)) {
-      return { sample: "", canBroader: false, canNarrower: false };
-    }
+    // Resolve anchor for step info only — never treat the current broader node as the leaf.
     let anchor = null;
-    if (field.anchorRelativeSelector) {
+    if (field._anchorEl instanceof Element && field._anchorEl.isConnected && item.contains(field._anchorEl)) {
+      anchor = field._anchorEl;
+    }
+    if (!anchor && field.anchorRelativeSelector) {
       try {
         anchor = NS.extract.queryField?.(item, field.anchorRelativeSelector);
       } catch {
         anchor = null;
       }
     }
-    if (!(anchor instanceof Element) || !item.contains(anchor)) anchor = el;
+    if (!(anchor instanceof Element) || !item.contains(anchor) || anchor === item) {
+      anchor = null;
+    } else {
+      field._anchorEl = anchor;
+    }
+    let el = null;
+    if (field._targetEl instanceof Element && field._targetEl.isConnected && item.contains(field._targetEl)) {
+      el = field._targetEl;
+    } else {
+      try {
+        el = NS.extract.queryField?.(item, field.relativeSelector);
+      } catch {
+        el = null;
+      }
+    }
+    if (!(el instanceof Element)) {
+      return { sample: "", canBroader: false, canNarrower: false };
+    }
     const info = NS.selectors.fieldTargetStepInfo?.(item, el, { anchor }) || {};
     const sample = String(el.textContent || "")
       .replace(/\s+/g, " ")
@@ -703,25 +717,51 @@
     const item = resolveGroupItem(group);
     if (!item) return;
     let current = null;
-    try {
-      current = NS.extract.queryField?.(item, field.relativeSelector);
-    } catch {
-      current = null;
+    if (field._targetEl instanceof Element && field._targetEl.isConnected && item.contains(field._targetEl)) {
+      current = field._targetEl;
+    } else {
+      try {
+        current = NS.extract.queryField?.(item, field.relativeSelector);
+      } catch {
+        current = null;
+      }
     }
     if (!(current instanceof Element)) return;
 
-    // Anchor = original (or last) leaf so Broader → Narrower can return to the price,
-    // not drift into a longer sibling branch like the title.
-    if (!field.anchorRelativeSelector) field.anchorRelativeSelector = field.relativeSelector;
-    let anchor = null;
-    try {
-      anchor = NS.extract.queryField?.(item, field.anchorRelativeSelector);
-    } catch {
-      anchor = null;
-    }
-    if (!(anchor instanceof Element) || !item.contains(anchor)) {
-      anchor = current;
+    // Anchor = original pick leaf so Broader → Narrower returns to the price leaf.
+    if (!field.anchorRelativeSelector && current !== item) {
       field.anchorRelativeSelector = field.relativeSelector;
+    }
+    let anchor = null;
+    if (field._anchorEl instanceof Element && field._anchorEl.isConnected && item.contains(field._anchorEl)) {
+      anchor = field._anchorEl;
+    }
+    if (!anchor && field.anchorRelativeSelector) {
+      try {
+        anchor = NS.extract.queryField?.(item, field.anchorRelativeSelector);
+      } catch {
+        anchor = null;
+      }
+    }
+    // Never clobber the stored pick leaf while broadening (would trap Narrower).
+    if (!(anchor instanceof Element) || !item.contains(anchor) || anchor === item) {
+      if (dir < 0) {
+        anchor = null;
+      } else {
+        anchor = current !== item ? current : null;
+      }
+    } else {
+      field._anchorEl = anchor;
+    }
+
+    if (
+      !anchor &&
+      field._anchorEl instanceof Element &&
+      field._anchorEl.isConnected &&
+      item.contains(field._anchorEl) &&
+      field._anchorEl !== item
+    ) {
+      anchor = field._anchorEl;
     }
 
     const next = NS.selectors.stepFieldTarget?.(item, current, dir, { anchor });
@@ -730,11 +770,13 @@
     const oldRel = field.relativeSelector;
     clearFieldOutlines(gi, name, oldRel);
     field.relativeSelector = NS.selectors.relativeSelector(item, next);
+    field._targetEl = next;
     // If Narrower leaves the old anchor branch, retarget the anchor to the new leaf tip.
-    if (dir > 0 && !(next === anchor || next.contains(anchor))) {
+    if (dir > 0 && anchor && !(next === anchor || next.contains(anchor))) {
       const tipLadder = NS.selectors.fieldTargetLadder?.(item, next, { anchor: next }) || [];
       const tip = tipLadder[tipLadder.length - 1] || next;
       field.anchorRelativeSelector = NS.selectors.relativeSelector(item, tip);
+      field._anchorEl = tip;
     }
     if (!group.sampleItem?.isConnected) group.sampleItem = item;
     markFieldSelected(gi, name, next);
