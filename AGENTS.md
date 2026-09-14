@@ -141,7 +141,7 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 1. **Item-relative fields:** `relativeSelector` is `:scope` / `:scope …` (or queryable from the item). Never save a document `cssPath` for a field.
 2. **`itemSelector`:** CSS under the list root when classes exist (e.g. `article.product`), not tag-only.
 3. **`queryItems`:** non-`*` selector → CSS matches only (empty OK). No tag-group fallback on miss.
-4. **Columns:** preview/export use `getColumns()` / `columnOrder` + `hiddenColumns`. Drop does not delete `relativeSelector`. Rename remaps field name + row keys together.
+4. **Columns:** preview/export use `getColumns()` / `columnOrder` + `hiddenColumns` (`visibleColumns`). Drop **true-deletes** the field from `fields` and removes its name from `columnOrder` and `hiddenColumns` (not hide-only). Rename remaps field name + row keys together.
 5. **Pagination:** same-origin next HTML only; dedupe by concatenated visible column values; abort on Stop; no row upload. Walk is blocked while any preview table is `rowsDirty`. Before extracting the live page (Walk page 1 / Run), `lazyLoad.revealRecipeItems` scrolls the list scrollport until item count stabilizes (hard round cap; restores scroll position; no-op on `DOMParser` pages).
 6. **Soft cap:** UX nudge only (never “create an account”); does not block save/walk.
 7. **No** `fetch` of scraped rows/recipes; permissions stay minimal.

@@ -154,7 +154,7 @@ Rationale: Start unlisted for initial review and testing. Switch to Public after
 
 ## Notes for Submission
 
-1. **Privacy URL:** Use the temporary GitHub Pages URL (`https://romanto.github.io/click-scrape/privacy.html`) until `nestix.app/privacy` is live. Update in the Store listing once the permanent domain is active.
+1. **Privacy URL:** Use the temporary GitHub Pages URL (`https://romanto.github.io/click-scrape/PRIVACY.html`) until `nestix.app/privacy` is live. Update in the Store listing once the permanent domain is active.
 
 2. **Screenshots:** Create pixel-perfect 1280×800 and 440×280 images based on the descriptions above. Use the actual extension interface with realistic data.
 
