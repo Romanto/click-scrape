@@ -1,7 +1,73 @@
-# Agent notes — Click Scrape
+# Agent notes — Nestix / Click Scrape
 
-Read this before changing picker, selectors, overlay, pagination, export, or packaging.
-Product brief: [CURSOR-MVP-PLAN.md](CURSOR-MVP-PLAN.md). PR #5 adds scoped similar-peer hover.
+Read this before changing picker, selectors, overlay, pagination, export, or packaging — and before **exploring** the extension against the business plan.
+
+| Doc | Use for |
+|-----|---------|
+| [README.md](README.md) | Product overview, feature status table, load + explore playbook |
+| [CURSOR-MVP-PLAN.md](CURSOR-MVP-PLAN.md) | Business wedge, MVP build order, competitors, non-goals, paid later |
+| **This file** | File ownership, engineering contracts, feature → code map |
+
+Store UI name: **Nestix**. Repo / namespaces: `ClickScrape`, `click-scrape-*`.
+
+PR #5 adds scoped similar-peer hover. Smooth picking hover UX uses floating `translate3d` boxes + pick flash.
+
+---
+
+## For exploring bots (Grok / QA / architecture)
+
+**Mission:** Verify the free product against [CURSOR-MVP-PLAN.md](CURSOR-MVP-PLAN.md) — nested lists + pagination + clean preview — without inventing schedule/cloud/AI scope.
+
+### Business → product claims
+
+| Claim | Must be true |
+|-------|----------------|
+| Local-only scraper | Rows/recipes stay on device; no upload of scrape data |
+| Nested / card lists | Item-relative fields rematch siblings after reload |
+| Pagination-friendly | Walk same-origin next HTML; stable merge; abort on Stop |
+| Clean editable preview | Rename / drop / reorder; optional row edits; export matches preview |
+| Soft free caps | Nudge only (10 recipes / 5 pages); never “create an account” |
+| Paid later | Schedule, cloud recipes, accounts — **out of scope** |
+
+### Feature → code map
+
+| Targeted feature | Start here | Tests / fixtures |
+|------------------|------------|------------------|
+| List / field selectors + peers | `src/shared/selectors.js` | `tests/selectors.test.mjs`, `noisy-bullets.html` |
+| Extract rows | `src/shared/extract.js` | `tests/extract.test.mjs` |
+| Column rename/drop/reorder | `src/shared/columns.js` | `tests/columns.test.mjs` |
+| Preview row edit | `src/shared/rows.js` | `tests/rows.test.mjs` |
+| Walk / merge pages | `src/shared/pagination.js` | `tests/pagination.test.mjs`, `demo-page-2.html` |
+| Lazy / virtual scroll | `src/shared/lazy-load.js` | `tests/lazy*.test.mjs`, `demo-lazy.html` |
+| Hover morph / stick / flash | `src/shared/highlight.js` + `content.js` | `tests/highlight.test.mjs` |
+| Export CSV/JSON | `src/shared/export.js` | `tests/export.test.mjs` |
+| Recipes + soft nudge + prefs | `src/shared/storage.js` | `tests/storage*.test.mjs` |
+| Picker session / groups / Walk UI | `src/content/content.js` | outline / edit / pick-scroll tests |
+| Overlay chrome | `src/content/picker-overlay.js` | (handlers only; no recipe mutation) |
+| Highlight / overlay CSS | `src/content/highlighter.css` | visual on demo |
+| Inject + relay | `src/background/service-worker.js` | no scrape logic |
+| Start / Edit / Run / Del | `src/popup/*` | `tests/editable*.test.mjs` |
+
+### Explore checklist
+
+```bash
+npm test
+python3 -m http.server 8765   # Load unpacked → http://127.0.0.1:8765/demo.html
+```
+
+1. **Picker** — Start picking → name Title → click nested title → similar dashed peers on siblings → pick flash → green selected.
+2. **Second column** — Price on same cards → one preview table with filled rows.
+3. **Walk** — Walk pages → ~10 unique rows from demo page 1+2 (HTTP required).
+4. **Preview edit** — Rename / drop / reorder column; export headers match; optional cell edit + Reset from page.
+5. **Multi-table** — Click a disjoint list (or outside live items) → new Table N from row 1.
+6. **Broader/Narrower** — On price, Broader then Narrower returns to the same price leaf (anchor).
+7. **Recipes** — Save → popup Run rematches; Edit → Update same `id`; soft nudge copy never asks for an account.
+8. **Privacy** — Grep: no network of scraped rows; SW has no storage/export of scrape payloads.
+9. **Out of scope** — Do not treat missing schedule/cloud/AI as MVP bugs.
+
+When reporting: cite **plan claim → observed behavior → file/path → pass/fail**.
+
+---
 
 ## Stack
 
@@ -26,6 +92,7 @@ Chrome MV3, **zero-build vanilla JS**. Scripts inject at runtime via the service
 | `src/background/service-worker.js` | Inject + message relay only | No scrape / storage / export logic |
 | `src/popup/*` | Start picking + recipe list | Thin; Edit / Run / Del; no full preview |
 | `demo.html`, `demo-page-2.html` | Nested cards + pagination fixtures | Serve over HTTP for Walk |
+| `demo-lazy.html` | Infinite / scroll-load fixture | Pick-time + Run lazy scroll |
 | `tests/**` | Contract tests (`npm test`) | linkedom; do not weaken for old bugs |
 
 ## Global namespace
@@ -62,11 +129,6 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 - Successful pick flashes a brief `.click-scrape-pick-flash`, then leaves green selected outlines as today.
 - Clear hover/similar boxes with hover clear and on stop; resync geometry on scroll/resize.
 - Do **not** put scrape logic in CSS; do **not** let similar/highlight classes leak into saved selectors (already filtered).
-
-### Tests
-
-- Fixture: `tests/fixtures/noisy-bullets.html`
-- Cases in `tests/selectors.test.mjs`: scoped peers, `ul`/`ol` fallback, `findListContext` ignores page-wide noise.
 
 ### Do not
 

@@ -47,7 +47,7 @@ Paste this into Cursor agents as the working brief. Repo/scaffold: `click-scrape
 | `demo.html` | local fixture | first acceptance surface |
 | `manifest.json` | MV3 | permissions stay minimal: `activeTab`, `scripting`, `storage`, host as needed |
 
-**Agent handoff:** see [AGENTS.md](AGENTS.md) for post-MVP contracts (similar-peer hover, column model, pagination, soft cap).
+**Agent handoff:** see [README.md](README.md) for feature status + explore playbook, and [AGENTS.md](AGENTS.md) for post-MVP contracts (similar-peer hover, column model, pagination, soft cap) and the feature → code map for Grok/QA bots.
 
 **Data path:** page \u2192 content extract \u2192 in-memory rows \u2192 export / local storage. Never network for scraped data.
 
