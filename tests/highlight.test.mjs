@@ -17,6 +17,10 @@ function load() {
       <h2 class="title" id="title">Title</h2>
       <span class="price" id="price">$5.95</span>
     </article>
+    <div class="grid">
+      <span class="cell" id="a">A</span>
+      <span class="cell" id="b">B</span>
+    </div>
   </body></html>`);
   const sandbox = { document, window, Element: window.Element, Node: window.Node };
   sandbox.globalThis = sandbox;
@@ -29,12 +33,14 @@ describe("highlight helpers", () => {
     const { highlight } = load();
     for (const name of [
       "pointInRect",
+      "overlapRatio",
       "stabilizeHoverTarget",
       "boxStyleFromRect",
       "applyBoxStyle",
     ]) {
       assert.equal(typeof highlight[name], "function", name);
     }
+    assert.equal(highlight.DEFAULT_STICK_PAD, 6);
   });
 
   it("refines into a descendant immediately", () => {
@@ -78,6 +84,54 @@ describe("highlight helpers", () => {
     assert.equal(next, card);
   });
 
+  it("resists one-frame sibling flips when rects heavily overlap", () => {
+    const { document, highlight } = load();
+    const a = document.getElementById("a");
+    const b = document.getElementById("b");
+    a.getBoundingClientRect = () => ({
+      left: 10,
+      top: 10,
+      right: 50,
+      bottom: 40,
+      width: 40,
+      height: 30,
+    });
+    b.getBoundingClientRect = () => ({
+      left: 12,
+      top: 12,
+      right: 52,
+      bottom: 42,
+      width: 40,
+      height: 30,
+    });
+    const kept = highlight.stabilizeHoverTarget(a, b, 20, 20);
+    assert.equal(kept, a);
+  });
+
+  it("switches siblings when pointer leaves the current box", () => {
+    const { document, highlight } = load();
+    const a = document.getElementById("a");
+    const b = document.getElementById("b");
+    a.getBoundingClientRect = () => ({
+      left: 10,
+      top: 10,
+      right: 50,
+      bottom: 40,
+      width: 40,
+      height: 30,
+    });
+    b.getBoundingClientRect = () => ({
+      left: 60,
+      top: 10,
+      right: 100,
+      bottom: 40,
+      width: 40,
+      height: 30,
+    });
+    const next = highlight.stabilizeHoverTarget(a, b, 80, 20);
+    assert.equal(next, b);
+  });
+
   it("boxStyleFromRect expands by outline offset", () => {
     const { highlight } = load();
     const style = highlight.boxStyleFromRect(
@@ -90,12 +144,13 @@ describe("highlight helpers", () => {
     assert.equal(style.height, 44);
   });
 
-  it("applyBoxStyle writes geometry and can disable motion", () => {
+  it("applyBoxStyle uses translate3d and can disable motion", () => {
     const { document, highlight } = load();
     const box = document.createElement("div");
     highlight.applyBoxStyle(box, { left: 1, top: 2, width: 3, height: 4 }, { animate: false });
-    assert.equal(box.style.left, "1px");
-    assert.equal(box.style.top, "2px");
+    assert.equal(box.style.left, "0px");
+    assert.equal(box.style.top, "0px");
+    assert.equal(box.style.transform, "translate3d(1px, 2px, 0)");
     assert.equal(box.style.width, "3px");
     assert.equal(box.style.height, "4px");
     assert.equal(box.classList.contains("cs-no-motion"), true);

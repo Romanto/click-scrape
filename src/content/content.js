@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "narrow-anchor-v5";
+  const BOOT = "smooth-hover-v1";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -16,6 +16,7 @@
   /** @typedef {{ name?: string, rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
 
   const SIMILAR_DEBOUNCE_MS = 70;
+  const PICK_FLASH_MS = 180;
 
   let state = {
     active: false,
@@ -85,6 +86,53 @@
     similarBoxes = [];
   }
 
+  /** Fade peer boxes out but keep the pool for reuse on the next settle. */
+  function fadeSimilarHints() {
+    if (similarTimer) {
+      clearTimeout(similarTimer);
+      similarTimer = 0;
+    }
+    similarHintNodes.forEach((node) => {
+      node?.classList?.remove("click-scrape-similar");
+    });
+    similarHintNodes = [];
+    for (const box of similarBoxes) {
+      box?.classList?.add?.("cs-peer-hidden");
+    }
+  }
+
+  function ensureSimilarBox(index) {
+    const layer = ensureHighlightLayer();
+    while (similarBoxes.length <= index) {
+      const box = document.createElement("div");
+      box.className = "click-scrape-similar-box cs-peer-hidden";
+      box.hidden = true;
+      layer.appendChild(box);
+      similarBoxes.push(box);
+    }
+    return similarBoxes[index];
+  }
+
+  function flashPickConfirm(el) {
+    if (!(el instanceof Element)) return;
+    const layer = ensureHighlightLayer();
+    const hl = NS.highlight;
+    const style = hl?.boxStyleFromRect?.(el.getBoundingClientRect(), 3);
+    if (!style || !hl?.applyBoxStyle) return;
+    const flash = document.createElement("div");
+    flash.className = "click-scrape-pick-flash cs-no-motion";
+    hl.applyBoxStyle(flash, style, { animate: false });
+    layer.appendChild(flash);
+    const raf = globalThis.requestAnimationFrame;
+    const startFade = () => {
+      flash.classList.remove("cs-no-motion");
+      flash.classList.add("cs-flash-out");
+    };
+    if (typeof raf === "function") raf.call(globalThis, () => raf.call(globalThis, startFade));
+    else startFade();
+    setTimeout(() => flash.remove(), PICK_FLASH_MS + 40);
+  }
+
   function clearRetrievedItems() {
     retrievedItemNodes.forEach((node) => {
       node?.classList?.remove("click-scrape-item");
@@ -146,7 +194,7 @@
     for (let i = 0; i < similarHintNodes.length; i += 1) {
       const node = similarHintNodes[i];
       const box = similarBoxes[i];
-      if (!node?.isConnected || !box) continue;
+      if (!node?.isConnected || !box || box.hidden) continue;
       const style = hl?.boxStyleFromRect?.(node.getBoundingClientRect(), 1);
       if (style) hl.applyBoxStyle(box, style, { animate: false });
     }
@@ -259,28 +307,45 @@
   }
 
   function applySimilarHints(peers) {
-    // Clear prior peer boxes only (keep any pending schedule owned by caller).
-    for (const box of similarBoxes) {
-      box?.remove?.();
-    }
-    similarBoxes = [];
     similarHintNodes.forEach((node) => {
       node?.classList?.remove("click-scrape-similar");
     });
     similarHintNodes = [];
 
-    const layer = ensureHighlightLayer();
-    const hl = NS.highlight;
+    const filtered = [];
     for (const el of peers || []) {
       if (!(el instanceof Element) || el === state.hoverEl) continue;
       if (el.classList.contains("click-scrape-item")) continue;
+      filtered.push(el);
+    }
+
+    const hl = NS.highlight;
+    ensureHighlightLayer();
+    for (let i = 0; i < filtered.length; i += 1) {
+      const el = filtered[i];
       similarHintNodes.push(el);
-      const box = document.createElement("div");
-      box.className = "click-scrape-similar-box";
+      const box = ensureSimilarBox(i);
       const style = hl?.boxStyleFromRect?.(el.getBoundingClientRect(), 1);
-      if (style) hl.applyBoxStyle(box, style, { animate: false });
-      layer.appendChild(box);
-      similarBoxes.push(box);
+      const entering = box.hidden || box.classList.contains("cs-peer-hidden");
+      if (style) hl?.applyBoxStyle?.(box, style, { animate: !entering });
+      box.hidden = false;
+      if (entering) {
+        box.classList.add("cs-peer-hidden", "cs-no-motion");
+        const raf = globalThis.requestAnimationFrame;
+        const reveal = () => {
+          if (!box.isConnected || similarHintNodes[i] !== el) return;
+          box.classList.remove("cs-no-motion");
+          box.classList.remove("cs-peer-hidden");
+        };
+        if (typeof raf === "function") raf.call(globalThis, reveal);
+        else reveal();
+      } else {
+        box.classList.remove("cs-peer-hidden");
+      }
+    }
+
+    for (let i = filtered.length; i < similarBoxes.length; i += 1) {
+      similarBoxes[i]?.classList?.add?.("cs-peer-hidden");
     }
   }
 
@@ -310,7 +375,7 @@
     const prev = state.hoverEl;
     state.hoverEl = el;
     placeHoverBox(el, !!prev);
-    clearSimilarHints();
+    fadeSimilarHints();
     scheduleSimilarHints(el);
   }
 
@@ -494,6 +559,7 @@
       stored._targetEl = el;
     }
     markFieldSelected(groupIndex, fieldName, el);
+    flashPickConfirm(el);
     if (nameInput) nameInput.value = "";
     if (group.rowsDirty) {
       mergeFieldIntoDirtyGroup(group, fieldName);
