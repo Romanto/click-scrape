@@ -582,15 +582,18 @@
   function groupColumns(group) {
     if (!group) return [];
     const hidden = new Set(group.hiddenColumns);
-    const inOrder = new Set(group.columnOrder);
+    const order = group.columnOrder.slice();  // Create a copy instead of mutating
+    const inOrder = new Set(order);
     for (const f of group.fields) {
       if (!inOrder.has(f.name) && !hidden.has(f.name)) {
-        group.columnOrder.push(f.name);
+        order.push(f.name);  // Push to the copy
         inOrder.add(f.name);
       }
     }
+    // Update group.columnOrder with the new order
+    group.columnOrder = order;
     const names = new Set(group.fields.map((f) => f.name));
-    return NS.columns.visibleColumns(group.columnOrder, group.hiddenColumns).filter((n) => names.has(n));
+    return NS.columns.visibleColumns(order, group.hiddenColumns).filter((n) => names.has(n));
   }
 
   function getPreviewTables() {
