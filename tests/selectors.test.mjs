@@ -395,4 +395,74 @@ describe("selectors", () => {
     assertItemRelative(rel);
     assert.equal(resolveRelative(item, rel), broader);
   });
+
+  it("Broader then Narrower on price returns to price when anchored", () => {
+    const priceEl = doc.querySelector("article.product .price");
+    const ctx = ClickScrape.selectors.findListContext(priceEl);
+    const item = ctx.items.find((i) => i.contains(priceEl));
+    assert.ok(item && priceEl);
+
+    let cur = priceEl;
+    for (let i = 0; i < 10; i += 1) {
+      const next = ClickScrape.selectors.stepFieldTarget(item, cur, "broader", { anchor: priceEl });
+      if (!next) break;
+      cur = next;
+      if (cur === item) break;
+    }
+    assert.equal(cur, item, "should broaden to the list item");
+
+    // Without anchor, Narrower drifts to the longer title branch.
+    const drifted = ClickScrape.selectors.stepFieldTarget(item, cur, "narrower");
+    assert.ok(drifted);
+    assert.ok(!drifted.classList?.contains?.("price"));
+
+    // With anchor, Narrower walks back toward the price.
+    cur = item;
+    for (let i = 0; i < 10; i += 1) {
+      const next = ClickScrape.selectors.stepFieldTarget(item, cur, "narrower", { anchor: priceEl });
+      if (!next) break;
+      cur = next;
+    }
+    assert.equal(cur, priceEl, "anchored Narrower must recover the price leaf");
+    assert.match(String(cur.textContent || ""), /\$/);
+  });
+
+  it("anchored Narrower recovers deep noisy price past the shallow depth cap", () => {
+    const html = loadFixture("deep-noisy-price.html");
+    const { document } = createDocument(html);
+    loadClickScrape(document.defaultView);
+    const CS = document.defaultView.ClickScrape;
+    const item = document.getElementById("dp");
+    const leaf = document.querySelector(".a-offscreen");
+    assert.ok(item && leaf);
+    let depth = 0;
+    for (let n = leaf; n && n !== item; n = n.parentElement) depth += 1;
+    assert.ok(depth > 8, `expected deep path, got depth ${depth}`);
+
+    // Mid-level dual-price node must still allow Narrower toward the leaf.
+    const dual = document.querySelector(".a-price");
+    const mid = CS.selectors.fieldTargetStepInfo(item, dual, { anchor: leaf });
+    assert.equal(mid.canNarrower, true, "depth cap must not disable Narrower on a-price");
+    assert.ok(mid.ladder.length > 8, "anchored ladder is the full item→leaf path");
+    assert.equal(mid.ladder[mid.ladder.length - 1], leaf);
+
+    let cur = leaf;
+    for (let i = 0; i < 40; i += 1) {
+      const next = CS.selectors.stepFieldTarget(item, cur, "broader", { anchor: leaf });
+      if (!next) break;
+      cur = next;
+      if (cur === item) break;
+    }
+    assert.equal(cur, item);
+
+    cur = item;
+    for (let i = 0; i < 40; i += 1) {
+      const next = CS.selectors.stepFieldTarget(item, cur, "narrower", { anchor: leaf });
+      if (!next) break;
+      cur = next;
+    }
+    assert.equal(cur, leaf, "must recover $19.99 leaf, not $19.99$19.99 wrapper");
+    assert.equal(String(cur.textContent || "").trim(), "$19.99");
+    assert.ok(!/product page/i.test(String(cur.textContent || "")));
+  });
 });

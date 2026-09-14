@@ -15,7 +15,9 @@ Chrome MV3, **zero-build vanilla JS**. Scripts inject at runtime via the service
 | `src/shared/extract.js` | `extractRows(recipe, doc)` | Item-relative fields |
 | `src/shared/columns.js` | Rename / drop / reorder / `applyPick` | No DOM re-walk for edit |
 | `src/shared/rows.js` | Preview row edit helpers | `updateCell` / `addRow` / `removeRow` / dirty merge |
-| `src/shared/pagination.js` | `findNextUrl`, `mergeRows`, `walkPages` | Same-origin GET of next HTML only |
+| `src/shared/pagination.js` | `findNextUrl`, `mergeRows`, `walkPages` | Same-origin GET of next HTML only; optional `beforeExtract` for live-doc settle |
+| `src/shared/lazy-load.js` | `scrollToRevealItems`, `revealRecipeItems` | Scroll list scrollport until item count stabilizes (Run / Walk page 1) |
+| `src/shared/highlight.js` | Hover stabilize + box geometry | `translate3d` morph, stick pad, overlap resist |
 | `src/shared/export.js` | CSV/JSON Blob download | `exportJson(rows, columns\|baseName, baseName?)` |
 | `src/shared/storage.js` | Recipes + soft-nudge helpers | Hard cap 50; soft nudge 10 recipes / 5 pages |
 | `src/content/content.js` | Picker state, overlay bind, walk, handlers | Owns recipe session; injects Walk button |
@@ -30,11 +32,11 @@ Chrome MV3, **zero-build vanilla JS**. Scripts inject at runtime via the service
 
 ```js
 globalThis.ClickScrape = {
-  selectors, extract, export, storage, pagination, columns, rows, overlay
+  selectors, extract, export, storage, pagination, columns, rows, lazyLoad, highlight, overlay
 }
 ```
 
-Service worker `CONTENT_FILES` order matters — shared modules (including `rows.js`) before `picker-overlay.js` before `content.js`.
+Service worker `CONTENT_FILES` order matters — shared modules (including `rows.js`, `highlight.js`) before `picker-overlay.js` before `content.js`.
 
 ## Similar-peer hover (PR #5 / post-MVP)
 
@@ -54,9 +56,12 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 
 ### Wiring (`src/content/content.js` + `highlighter.css`)
 
-- `onMouseMove` → `findSimilarPeers(el)` → add `.click-scrape-similar` (dashed outline).
-- Clear similar hints with hover clear and on stop.
-- Do **not** put scrape logic in CSS; do **not** let similar classes leak into saved selectors (already filtered).
+- Hover visuals use a **floating** `#click-scrape-highlight-layer` box (smooth geometry), not outline classes on the host node.
+- Geometry uses `transform: translate3d` + width/height (~150ms ease); snap with `cs-no-motion` on first show and scroll/resize.
+- `onMouseMove` (rAF) → `highlight.stabilizeHoverTarget` (stick pad ~6px; resist parent + overlapping-sibling thrash) → morph primary box → **debounced** `findSimilarPeers` into a **reused similar-box pool** (opacity fade enter/leave).
+- Successful pick flashes a brief `.click-scrape-pick-flash`, then leaves green selected outlines as today.
+- Clear hover/similar boxes with hover clear and on stop; resync geometry on scroll/resize.
+- Do **not** put scrape logic in CSS; do **not** let similar/highlight classes leak into saved selectors (already filtered).
 
 ### Tests
 
@@ -75,16 +80,17 @@ ClickScrape.selectors.getSimilarScopeRoot(element) → Element|null
 2. **`itemSelector`:** CSS under the list root when classes exist (e.g. `article.product`), not tag-only.
 3. **`queryItems`:** non-`*` selector → CSS matches only (empty OK). No tag-group fallback on miss.
 4. **Columns:** preview/export use `getColumns()` / `columnOrder` + `hiddenColumns`. Drop does not delete `relativeSelector`. Rename remaps field name + row keys together.
-5. **Pagination:** same-origin next HTML only; dedupe by concatenated visible column values; abort on Stop; no row upload. Walk is blocked while any preview table is `rowsDirty`.
+5. **Pagination:** same-origin next HTML only; dedupe by concatenated visible column values; abort on Stop; no row upload. Walk is blocked while any preview table is `rowsDirty`. Before extracting the live page (Walk page 1 / Run), `lazyLoad.revealRecipeItems` scrolls the list scrollport until item count stabilizes (hard round cap; restores scroll position; no-op on `DOMParser` pages).
 6. **Soft cap:** UX nudge only (never “create an account”); does not block save/walk.
 7. **No** `fetch` of scraped rows/recipes; permissions stay minimal.
-8. **List groups (multi-table preview):** each repeating list is a **group** with its own `liveItems` / fields / rows. A **nested** disjoint list under a greedy first pick **replaces** all groups. A **sibling** disjoint list **starts a new group** (own table from row 1). A click **outside every current live item** (e.g. price block → shipping line) also starts a new group — never glue onto the last group (that yields empty cells). Same-list clicks still add columns to that group. Export concatenates groups with a blank CSV separator (JSON array of tables). Saved recipes store a `groups[]` array (legacy top-level `fields` / `rootSelector` remain the first group for Walk).
+8. **List groups (multi-table preview):** each repeating list is a **group** with its own `liveItems` / fields / rows. Optional `groups[].name` (click-to-rename the preview toolbar label); empty → UI shows `Table N`. Names persist on Save/Update and rematch on Edit/Run. JSON multi-export includes `name` when set; CSV stays blank-line separators only (no table-name rows). A **nested** disjoint list under a greedy first pick **replaces** all groups. A **sibling** disjoint list **starts a new group** (own table from row 1). A click **outside every current live item** (e.g. price block → shipping line) also starts a new group — never glue onto the last group (that yields empty cells). Same-list clicks still add columns to that group. Export concatenates groups with a blank CSV separator (JSON array of tables). Saved recipes store a `groups[]` array (legacy top-level `fields` / `rootSelector` remain the first group for Walk).
 9. **Dense list peers only:** `findListContext` must not treat page-wide `.celwidget` (or other sparse peers) as rows when the picked field rematches only one of them — fall back to a singleton host (e.g. `#corePrice_desktop`) so Price + Discount% yield one filled row, not a table of blanks.
 10. **Preview row edit:** users may edit cells, add rows, and delete rows in the overlay. That sets `rowsDirty` so `refreshGroupRows` will not overwrite edits. **Reset from page** clears dirty and re-scrapes. Recipes never store row payloads — Run always re-scrapes. Export uses the edited `group.rows`.
 11. **Unique ids in selectors:** `cssPath` / singleton `itemSelector` must not stop on an `id` that appears more than once in the document (Amazon reuses `#tp-inline-twister-dim-values-container`). Prefer a unique ancestor (e.g. `#inline-twister-expander-content-size_name`) so Run rematches Size, not Color.
 12. **Edit saved recipe:** Popup **Edit** (or Run → **Edit recipe**) rematches `groups[]` and enables picking — same click-to-add behavior as Start picking (lists auto-detect). Drop columns with × (last column removes that table). **Update recipe** overwrites the same `recipe.id` (keeps name/`createdAt`); still no row snapshots.
-13. **Field nesting adjust:** Broader / Narrower on each field walks the DOM ladder (wrapper ↔ inner text) and rewrites `relativeSelector` via `stepFieldTarget` — no raw CSS/XPath editing. Live outlines + preview update; still item-relative only. While editing a saved recipe, nesting auto-persists.
+13. **Field nesting adjust:** Broader / Narrower on each field walks the DOM ladder (wrapper ↔ inner text) and rewrites `relativeSelector` via `stepFieldTarget` — no raw CSS/XPath editing. Live outlines + preview update; still item-relative only. While editing a saved recipe, nesting auto-persists. Each field keeps an `anchorRelativeSelector` (the picked leaf) plus in-session `_anchorEl` / `_targetEl` so Broader → Narrower returns along the same branch (e.g. `$19.99`), not a longer sibling like the title or a dual-price wrapper (`$19.99$19.99`). With an anchor, `fieldTargetLadder` uses the **full** item→leaf path via `pathFromTo` (never the shallow ~8 depth cap — that traps Narrower on deep Amazon cards). Do **not** overwrite `anchorRelativeSelector` with the current broader node (`:scope` / card) during Broader or UI refresh. Tests: `tests/selectors.test.mjs` (demo price + `deep-noisy-price.html`).
 14. **User prefs (device-local):** `previewRowLimit` (Show rows) is stored in `chrome.storage.local` via `getPrefs` / `setPrefs`.
+15. **Lazy scroll load:** infinite/virtual lists are collected via `lazyLoad.scrapeRecipeWhileScrolling` on **Run**, **Walk** (live page 1), and **pick-time** (after adding a column / Reset from page while the picker is active): scroll + merge rows each round until stable (hard round cap; restores scroll). Prefer merge-while-scrolling over scroll-then-extract-once so virtualized nodes are not lost. Pick-time scroll updates preview rows + `liveItems` outlines; aborted on Stop / Walk / a newer pick-scroll. `revealRecipeItems` remains for count-only settle. Parsed Walk pages stay no-op.
 
 ## How to verify
 

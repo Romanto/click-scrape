@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "prefs-v1";
+  const BOOT = "smooth-hover-v1";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -13,7 +13,10 @@
 
   const NS = (globalThis.ClickScrape = globalThis.ClickScrape || {});
 
-  /** @typedef {{ rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
+  /** @typedef {{ name?: string, rootSelector: string, itemSelector: string, fields: {name:string,relativeSelector:string}[], sampleItem: Element|null, liveItems: Element[], rows: object[], columnOrder: string[], hiddenColumns: string[], rowsDirty: boolean }} ListGroup */
+
+  const SIMILAR_DEBOUNCE_MS = 70;
+  const PICK_FLASH_MS = 180;
 
   let state = {
     active: false,
@@ -26,8 +29,13 @@
 
   let walkController = null;
   let walkGeneration = 0;
+  /** @type {AbortController | null} */
+  let pickScrollController = null;
+  let pickScrollGeneration = 0;
   /** @type {Element[]} */
   let similarHintNodes = [];
+  /** @type {HTMLElement[]} */
+  let similarBoxes = [];
   /** @type {Element[]} */
   let retrievedItemNodes = [];
   /** @type {Map<string, Set<Element>>} key = `${groupIndex}::${fieldName}` */
@@ -37,6 +45,15 @@
   /** @type {{ name?: string, createdAt?: number } | null} */
   let editingRecipeMeta = null;
   let recipePersistTimer = null;
+  /** @type {HTMLElement | null} */
+  let highlightLayer = null;
+  /** @type {HTMLElement | null} */
+  let hoverBox = null;
+  let hoverBoxShown = false;
+  let hoverRaf = 0;
+  /** @type {{ x: number, y: number } | null} */
+  let pendingHoverPoint = null;
+  let similarTimer = 0;
 
   function fieldKey(groupIndex, name) {
     return `${groupIndex}::${name}`;
@@ -55,10 +72,65 @@
   }
 
   function clearSimilarHints() {
+    if (similarTimer) {
+      clearTimeout(similarTimer);
+      similarTimer = 0;
+    }
     similarHintNodes.forEach((node) => {
       node?.classList?.remove("click-scrape-similar");
     });
     similarHintNodes = [];
+    for (const box of similarBoxes) {
+      box?.remove?.();
+    }
+    similarBoxes = [];
+  }
+
+  /** Fade peer boxes out but keep the pool for reuse on the next settle. */
+  function fadeSimilarHints() {
+    if (similarTimer) {
+      clearTimeout(similarTimer);
+      similarTimer = 0;
+    }
+    similarHintNodes.forEach((node) => {
+      node?.classList?.remove("click-scrape-similar");
+    });
+    similarHintNodes = [];
+    for (const box of similarBoxes) {
+      box?.classList?.add?.("cs-peer-hidden");
+    }
+  }
+
+  function ensureSimilarBox(index) {
+    const layer = ensureHighlightLayer();
+    while (similarBoxes.length <= index) {
+      const box = document.createElement("div");
+      box.className = "click-scrape-similar-box cs-peer-hidden";
+      box.hidden = true;
+      layer.appendChild(box);
+      similarBoxes.push(box);
+    }
+    return similarBoxes[index];
+  }
+
+  function flashPickConfirm(el) {
+    if (!(el instanceof Element)) return;
+    const layer = ensureHighlightLayer();
+    const hl = NS.highlight;
+    const style = hl?.boxStyleFromRect?.(el.getBoundingClientRect(), 3);
+    if (!style || !hl?.applyBoxStyle) return;
+    const flash = document.createElement("div");
+    flash.className = "click-scrape-pick-flash cs-no-motion";
+    hl.applyBoxStyle(flash, style, { animate: false });
+    layer.appendChild(flash);
+    const raf = globalThis.requestAnimationFrame;
+    const startFade = () => {
+      flash.classList.remove("cs-no-motion");
+      flash.classList.add("cs-flash-out");
+    };
+    if (typeof raf === "function") raf.call(globalThis, () => raf.call(globalThis, startFade));
+    else startFade();
+    setTimeout(() => flash.remove(), PICK_FLASH_MS + 40);
   }
 
   function clearRetrievedItems() {
@@ -68,8 +140,83 @@
     retrievedItemNodes = [];
   }
 
+  function ensureHighlightLayer() {
+    if (highlightLayer?.isConnected && hoverBox?.isConnected) return highlightLayer;
+    highlightLayer = document.getElementById("click-scrape-highlight-layer");
+    if (!highlightLayer) {
+      highlightLayer = document.createElement("div");
+      highlightLayer.id = "click-scrape-highlight-layer";
+      document.documentElement.appendChild(highlightLayer);
+    }
+    hoverBox = highlightLayer.querySelector(".click-scrape-hover-box");
+    if (!hoverBox) {
+      hoverBox = document.createElement("div");
+      hoverBox.className = "click-scrape-hover-box";
+      hoverBox.hidden = true;
+      highlightLayer.appendChild(hoverBox);
+    }
+    return highlightLayer;
+  }
+
+  function removeHighlightLayer() {
+    clearSimilarHints();
+    hoverBoxShown = false;
+    hoverBox = null;
+    highlightLayer?.remove?.();
+    highlightLayer = null;
+    document.getElementById("click-scrape-highlight-layer")?.remove?.();
+  }
+
+  function placeHoverBox(el, animate) {
+    if (!(el instanceof Element)) return;
+    ensureHighlightLayer();
+    const hl = NS.highlight;
+    const style = hl?.boxStyleFromRect?.(el.getBoundingClientRect(), 2);
+    if (!style || !hoverBox) return;
+    const useMotion = animate && hoverBoxShown;
+    hl.applyBoxStyle(hoverBox, style, { animate: useMotion });
+    hoverBoxShown = true;
+  }
+
+  function hideHoverBox() {
+    if (hoverBox) {
+      hoverBox.hidden = true;
+      hoverBox.classList?.add?.("cs-no-motion");
+    }
+    hoverBoxShown = false;
+  }
+
+  function syncHighlightGeometry(animate) {
+    if (!state.hoverEl?.isConnected) return;
+    placeHoverBox(state.hoverEl, animate);
+    if (!similarHintNodes.length || !similarBoxes.length) return;
+    const hl = NS.highlight;
+    for (let i = 0; i < similarHintNodes.length; i += 1) {
+      const node = similarHintNodes[i];
+      const box = similarBoxes[i];
+      if (!node?.isConnected || !box || box.hidden) continue;
+      const style = hl?.boxStyleFromRect?.(node.getBoundingClientRect(), 1);
+      if (style) hl.applyBoxStyle(box, style, { animate: false });
+    }
+  }
+
+  function scheduleSimilarHints(el) {
+    if (similarTimer) clearTimeout(similarTimer);
+    similarTimer = setTimeout(() => {
+      similarTimer = 0;
+      if (!state.active || state.hoverEl !== el) return;
+      applySimilarHints(NS.selectors.findSimilarPeers?.(el) || []);
+    }, SIMILAR_DEBOUNCE_MS);
+  }
+
+  function onViewportChange() {
+    if (!state.active || !state.hoverEl) return;
+    syncHighlightGeometry(false);
+  }
+
   function createGroup(ctx) {
     return {
+      name: "",
       rootSelector: ctx?.rootSelector || "",
       itemSelector: ctx?.itemSelector || "*",
       fields: [],
@@ -143,31 +290,110 @@
     }
   }
 
+  function scheduleHoverFrame(cb) {
+    const raf = globalThis.requestAnimationFrame;
+    if (typeof raf === "function") return raf.call(globalThis, cb);
+    cb();
+    return 0;
+  }
+
+  function cancelHoverFrame(id) {
+    const caf = globalThis.cancelAnimationFrame;
+    if (typeof caf === "function") {
+      caf.call(globalThis, id);
+      return;
+    }
+    if (id) clearTimeout(id);
+  }
+
   function applySimilarHints(peers) {
-    clearSimilarHints();
+    similarHintNodes.forEach((node) => {
+      node?.classList?.remove("click-scrape-similar");
+    });
+    similarHintNodes = [];
+
+    const filtered = [];
     for (const el of peers || []) {
       if (!(el instanceof Element) || el === state.hoverEl) continue;
       if (el.classList.contains("click-scrape-item")) continue;
-      el.classList.add("click-scrape-similar");
+      filtered.push(el);
+    }
+
+    const hl = NS.highlight;
+    ensureHighlightLayer();
+    for (let i = 0; i < filtered.length; i += 1) {
+      const el = filtered[i];
       similarHintNodes.push(el);
+      const box = ensureSimilarBox(i);
+      const style = hl?.boxStyleFromRect?.(el.getBoundingClientRect(), 1);
+      const entering = box.hidden || box.classList.contains("cs-peer-hidden");
+      if (style) hl?.applyBoxStyle?.(box, style, { animate: !entering });
+      box.hidden = false;
+      if (entering) {
+        box.classList.add("cs-peer-hidden", "cs-no-motion");
+        const raf = globalThis.requestAnimationFrame;
+        const reveal = () => {
+          if (!box.isConnected || similarHintNodes[i] !== el) return;
+          box.classList.remove("cs-no-motion");
+          box.classList.remove("cs-peer-hidden");
+        };
+        if (typeof raf === "function") raf.call(globalThis, reveal);
+        else reveal();
+      } else {
+        box.classList.remove("cs-peer-hidden");
+      }
+    }
+
+    for (let i = filtered.length; i < similarBoxes.length; i += 1) {
+      similarBoxes[i]?.classList?.add?.("cs-peer-hidden");
     }
   }
 
   function clearHover() {
-    state.hoverEl?.classList.remove("click-scrape-hover");
+    if (hoverRaf) {
+      cancelHoverFrame(hoverRaf);
+      hoverRaf = 0;
+    }
+    pendingHoverPoint = null;
     state.hoverEl = null;
+    hideHoverBox();
     clearSimilarHints();
+  }
+
+  function processHoverPoint(clientX, clientY) {
+    const raw = document.elementFromPoint(clientX, clientY);
+    if (!raw || isOverlay(raw)) {
+      if (state.hoverEl) clearHover();
+      return;
+    }
+    const stabilize = NS.highlight?.stabilizeHoverTarget;
+    const el = stabilize ? stabilize(state.hoverEl, raw, clientX, clientY) : raw;
+    if (!el || el === state.hoverEl) {
+      if (el === state.hoverEl && el) placeHoverBox(el, true);
+      return;
+    }
+    const prev = state.hoverEl;
+    state.hoverEl = el;
+    placeHoverBox(el, !!prev);
+    fadeSimilarHints();
+    scheduleSimilarHints(el);
   }
 
   function onMouseMove(e) {
     if (!state.active || isOverlayEvent(e)) return;
-    const el = document.elementFromPoint(e.clientX, e.clientY);
-    if (!el || el === state.hoverEl || isOverlay(el)) return;
-    clearHover();
-    state.hoverEl = el;
-    el.classList.add("click-scrape-hover");
-    const peers = NS.selectors.findSimilarPeers?.(el) || [];
-    applySimilarHints(peers);
+    pendingHoverPoint = { x: e.clientX, y: e.clientY };
+    if (hoverRaf) return;
+    let ranSync = false;
+    hoverRaf = scheduleHoverFrame(() => {
+      ranSync = true;
+      hoverRaf = 0;
+      const point = pendingHoverPoint;
+      pendingHoverPoint = null;
+      if (!point || !state.active) return;
+      processHoverPoint(point.x, point.y);
+    });
+    // Sync rAF polyfills (tests) finish before the id is assigned — don't stick a stale handle.
+    if (ranSync) hoverRaf = 0;
   }
 
   function findFieldForClick(el, item, group) {
@@ -326,7 +552,14 @@
       picked.fields.find((f) => f.relativeSelector === rel)?.name ||
       picked.fields[picked.fields.length - 1]?.name ||
       name;
+    const stored = group.fields.find((f) => f.name === fieldName);
+    if (stored) {
+      if (!stored.anchorRelativeSelector) stored.anchorRelativeSelector = stored.relativeSelector;
+      stored._anchorEl = el;
+      stored._targetEl = el;
+    }
     markFieldSelected(groupIndex, fieldName, el);
+    flashPickConfirm(el);
     if (nameInput) nameInput.value = "";
     if (group.rowsDirty) {
       mergeFieldIntoDirtyGroup(group, fieldName);
@@ -336,6 +569,8 @@
       applyColumnView();
     } else {
       refreshUi();
+      // Load lazy/infinite peers so preview + outlines grow beyond the first viewport.
+      expandGroupByScrolling(group);
     }
   }
 
@@ -360,12 +595,16 @@
 
   function getPreviewTables() {
     return state.groups
-      .map((group, groupIndex) => ({
-        groupIndex,
-        columns: groupColumns(group),
-        rows: Array.isArray(group.rows) ? group.rows : [],
-        rowsDirty: !!group.rowsDirty,
-      }))
+      .map((group, groupIndex) => {
+        const name = String(group.name || "").trim();
+        return {
+          groupIndex,
+          name,
+          columns: groupColumns(group),
+          rows: Array.isArray(group.rows) ? group.rows : [],
+          rowsDirty: !!group.rowsDirty,
+        };
+      })
       .filter((t) => t.columns.length);
   }
 
@@ -382,16 +621,37 @@
     if (!item || !field?.relativeSelector) {
       return { sample: "", canBroader: false, canNarrower: false };
     }
+    // Resolve anchor for step info only — never treat the current broader node as the leaf.
+    let anchor = null;
+    if (field._anchorEl instanceof Element && field._anchorEl.isConnected && item.contains(field._anchorEl)) {
+      anchor = field._anchorEl;
+    }
+    if (!anchor && field.anchorRelativeSelector) {
+      try {
+        anchor = NS.extract.queryField?.(item, field.anchorRelativeSelector);
+      } catch {
+        anchor = null;
+      }
+    }
+    if (!(anchor instanceof Element) || !item.contains(anchor) || anchor === item) {
+      anchor = null;
+    } else {
+      field._anchorEl = anchor;
+    }
     let el = null;
-    try {
-      el = NS.extract.queryField?.(item, field.relativeSelector);
-    } catch {
-      el = null;
+    if (field._targetEl instanceof Element && field._targetEl.isConnected && item.contains(field._targetEl)) {
+      el = field._targetEl;
+    } else {
+      try {
+        el = NS.extract.queryField?.(item, field.relativeSelector);
+      } catch {
+        el = null;
+      }
     }
     if (!(el instanceof Element)) {
       return { sample: "", canBroader: false, canNarrower: false };
     }
-    const info = NS.selectors.fieldTargetStepInfo?.(item, el) || {};
+    const info = NS.selectors.fieldTargetStepInfo?.(item, el, { anchor }) || {};
     const sample = String(el.textContent || "")
       .replace(/\s+/g, " ")
       .trim()
@@ -458,6 +718,26 @@
     applyColumnView();
   }
 
+  function onRenameTable(groupIndex, nextName) {
+    if (state.walking) return;
+    const gi = Number(groupIndex);
+    if (!Number.isFinite(gi) || !state.groups[gi]) return;
+    const group = state.groups[gi];
+    const trimmed = String(nextName || "").trim();
+    if (!trimmed) {
+      group.name = "";
+      applyColumnView();
+      if (editingRecipeId) scheduleRecipePersist();
+      return;
+    }
+    const used = state.groups
+      .map((g, i) => (i === gi ? "" : String(g.name || "").trim()))
+      .filter(Boolean);
+    group.name = NS.columns.uniqueName(trimmed, used);
+    applyColumnView();
+    if (editingRecipeId) scheduleRecipePersist();
+  }
+
   function onDrop(name, groupIndex) {
     if (state.walking) return;
     const gi = findGroupIndexForFieldName(name, groupIndex);
@@ -503,18 +783,67 @@
     const item = resolveGroupItem(group);
     if (!item) return;
     let current = null;
-    try {
-      current = NS.extract.queryField?.(item, field.relativeSelector);
-    } catch {
-      current = null;
+    if (field._targetEl instanceof Element && field._targetEl.isConnected && item.contains(field._targetEl)) {
+      current = field._targetEl;
+    } else {
+      try {
+        current = NS.extract.queryField?.(item, field.relativeSelector);
+      } catch {
+        current = null;
+      }
     }
     if (!(current instanceof Element)) return;
-    const next = NS.selectors.stepFieldTarget?.(item, current, dir);
+
+    // Anchor = original pick leaf so Broader → Narrower returns to the price leaf.
+    if (!field.anchorRelativeSelector && current !== item) {
+      field.anchorRelativeSelector = field.relativeSelector;
+    }
+    let anchor = null;
+    if (field._anchorEl instanceof Element && field._anchorEl.isConnected && item.contains(field._anchorEl)) {
+      anchor = field._anchorEl;
+    }
+    if (!anchor && field.anchorRelativeSelector) {
+      try {
+        anchor = NS.extract.queryField?.(item, field.anchorRelativeSelector);
+      } catch {
+        anchor = null;
+      }
+    }
+    // Never clobber the stored pick leaf while broadening (would trap Narrower).
+    if (!(anchor instanceof Element) || !item.contains(anchor) || anchor === item) {
+      if (dir < 0) {
+        anchor = null;
+      } else {
+        anchor = current !== item ? current : null;
+      }
+    } else {
+      field._anchorEl = anchor;
+    }
+
+    if (
+      !anchor &&
+      field._anchorEl instanceof Element &&
+      field._anchorEl.isConnected &&
+      item.contains(field._anchorEl) &&
+      field._anchorEl !== item
+    ) {
+      anchor = field._anchorEl;
+    }
+
+    const next = NS.selectors.stepFieldTarget?.(item, current, dir, { anchor });
     if (!(next instanceof Element) || next === current) return;
 
     const oldRel = field.relativeSelector;
     clearFieldOutlines(gi, name, oldRel);
     field.relativeSelector = NS.selectors.relativeSelector(item, next);
+    field._targetEl = next;
+    // If Narrower leaves the old anchor branch, retarget the anchor to the new leaf tip.
+    if (dir > 0 && anchor && !(next === anchor || next.contains(anchor))) {
+      const tipLadder = NS.selectors.fieldTargetLadder?.(item, next, { anchor: next }) || [];
+      const tip = tipLadder[tipLadder.length - 1] || next;
+      field.anchorRelativeSelector = NS.selectors.relativeSelector(item, tip);
+      field._anchorEl = tip;
+    }
     if (!group.sampleItem?.isConnected) group.sampleItem = item;
     markFieldSelected(gi, name, next);
 
@@ -592,6 +921,7 @@
     NS.overlay.setSessionHandlers?.({
       onEditRecipe: beginRecipeEdit,
       onPreviewRowLimit: onPreviewRowLimit,
+      onRenameTable,
     });
     syncSessionChrome();
   }
@@ -635,13 +965,24 @@
       fields: primary.fields,
       columnOrder: primary.columnOrder.slice(),
       hiddenColumns: primary.hiddenColumns.slice(),
-      groups: groups.map((g) => ({
-        rootSelector: g.rootSelector,
-        itemSelector: g.itemSelector,
-        fields: g.fields.map((f) => ({ name: f.name, relativeSelector: f.relativeSelector })),
-        columnOrder: g.columnOrder.slice(),
-        hiddenColumns: g.hiddenColumns.slice(),
-      })),
+      groups: groups.map((g) => {
+        const entry = {
+          rootSelector: g.rootSelector,
+          itemSelector: g.itemSelector,
+          fields: g.fields.map((f) => {
+            const entry = { name: f.name, relativeSelector: f.relativeSelector };
+            if (f.anchorRelativeSelector && f.anchorRelativeSelector !== f.relativeSelector) {
+              entry.anchorRelativeSelector = f.anchorRelativeSelector;
+            }
+            return entry;
+          }),
+          columnOrder: g.columnOrder.slice(),
+          hiddenColumns: g.hiddenColumns.slice(),
+        };
+        const n = String(g.name || "").trim();
+        if (n) entry.name = n;
+        return entry;
+      }),
     };
   }
 
@@ -715,6 +1056,7 @@
   }
 
   function deactivatePicking() {
+    abortPickScroll();
     if (!state.active) return;
     state.active = false;
     document.removeEventListener("mousemove", onMouseMove, true);
@@ -772,6 +1114,81 @@
     );
     applyColumnView();
     setHint("Table reset from the page.");
+    expandGroupByScrolling(group);
+  }
+
+  function abortPickScroll() {
+    pickScrollGeneration += 1;
+    try {
+      pickScrollController?.abort();
+    } catch {
+      /* ignore */
+    }
+    pickScrollController = null;
+  }
+
+  /**
+   * While picking: scroll the list and merge rows so the preview fills beyond the viewport.
+   * Fire-and-forget; aborted on Stop / Walk / a newer pick-scroll.
+   */
+  async function expandGroupByScrolling(group) {
+    if (!state.active || state.walking || !group || group.rowsDirty) return;
+    if (!group.fields?.length || !group.rootSelector) return;
+    if (typeof NS.lazyLoad?.scrapeRecipeWhileScrolling !== "function") return;
+
+    const gen = ++pickScrollGeneration;
+    try {
+      pickScrollController?.abort();
+    } catch {
+      /* ignore */
+    }
+    pickScrollController =
+      typeof AbortController === "function" ? new AbortController() : null;
+
+    const recipe = {
+      rootSelector: group.rootSelector,
+      itemSelector: group.itemSelector || "*",
+      fields: group.fields,
+    };
+    const columns = groupColumns(group);
+    const beforeCount = Array.isArray(group.rows) ? group.rows.length : 0;
+    setHint("Scrolling to load more items…");
+
+    try {
+      const scraped = await NS.lazyLoad.scrapeRecipeWhileScrolling(recipe, document, {
+        signal: pickScrollController?.signal,
+        columns,
+        onProgress: ({ rows }) => {
+          if (gen !== pickScrollGeneration || group.rowsDirty || !state.active) return;
+          group.rows = rows;
+          applyColumnView();
+          setHint(`Scrolling to load more items… ${rows.length} row(s)`);
+        },
+      });
+      if (gen !== pickScrollGeneration || !state.active || group.rowsDirty) return;
+
+      if (scraped?.rows) group.rows = scraped.rows;
+      const items = NS.extract.retrieveItems?.(recipe) || [];
+      if (items.length) {
+        group.liveItems = items.filter((n) => n?.nodeType === 1);
+      }
+      highlightRetrievedItems(
+        state.groups.flatMap((g) => (g.fields.length ? outlineItemsForGroup(g) : []))
+      );
+      applyColumnView();
+      const n = group.rows?.length || 0;
+      if (n > beforeCount) {
+        setHint(`Loaded ${n} row(s). Click to add columns, or Export / Walk.`);
+      } else {
+        setHint(`${n} row(s). Click to add columns, or Export / Walk.`);
+      }
+    } catch (err) {
+      if (err && err.name === "AbortError") return;
+      if (gen !== pickScrollGeneration) return;
+      setHint("Could not load more items by scrolling. Export or Walk with what you have.");
+    } finally {
+      if (gen === pickScrollGeneration) pickScrollController = null;
+    }
   }
 
   function mergeFieldIntoDirtyGroup(group, fieldName) {
@@ -851,6 +1268,7 @@
 
   async function onWalkPages() {
     if (state.walking) return;
+    abortPickScroll();
     if (anyRowsDirty()) {
       setHint("Reset edited tables from the page before walking, or Export first.");
       return;
@@ -877,6 +1295,21 @@
         persistPageCount,
         signal: walkController?.signal,
         columns,
+        beforeExtract: async (doc) => {
+          if (doc !== document) return null;
+          setHint("Scrolling to load items…");
+          const scraped = await NS.lazyLoad?.scrapeRecipeWhileScrolling?.(recipe, doc, {
+            signal: walkController?.signal,
+            columns,
+            onProgress: ({ rows }) => {
+              if (stale()) return;
+              group.rows = rows;
+              applyColumnView();
+              setHint(`Scrolling to load items… ${rows.length} row(s) so far`);
+            },
+          });
+          return scraped || null;
+        },
         onProgress: ({ rows, hint, done }) => {
           if (stale()) return;
           group.rows = rows;
@@ -985,9 +1418,13 @@
     bindOverlay();
     syncSessionChrome();
     loadUserPrefs().then(() => applyColumnView()).catch(() => {});
+    document.documentElement.classList.add("click-scrape-picking");
+    ensureHighlightLayer();
     document.addEventListener("mousemove", onMouseMove, true);
     document.addEventListener("click", onClick, true);
     document.addEventListener("keydown", onKeyDown, true);
+    window.addEventListener("scroll", onViewportChange, true);
+    window.addEventListener("resize", onViewportChange, true);
     refreshUi();
     if (!editingRecipeId) {
       setHint("Hover and click to add columns. Esc cancels.");
@@ -996,6 +1433,7 @@
 
   function stopPicker() {
     walkGeneration += 1;
+    abortPickScroll();
     try {
       walkController?.abort();
     } catch {
@@ -1020,9 +1458,13 @@
     document.querySelectorAll(".click-scrape-similar").forEach((el) => el.classList.remove("click-scrape-similar"));
     document.querySelectorAll(".click-scrape-item").forEach((el) => el.classList.remove("click-scrape-item"));
     similarHintNodes = [];
+    document.documentElement.classList.remove("click-scrape-picking");
+    removeHighlightLayer();
     document.removeEventListener("mousemove", onMouseMove, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
+    window.removeEventListener("scroll", onViewportChange, true);
+    window.removeEventListener("resize", onViewportChange, true);
     NS.overlay.removeOverlay();
   }
 
@@ -1064,16 +1506,23 @@
 
     const built = [];
     const allItems = [];
+    setHint("Scrolling to load items…");
     for (const spec of specs) {
       const group = createGroup({
         rootSelector: spec.rootSelector || "",
         itemSelector: spec.itemSelector || "*",
         items: [],
       });
-      group.fields = (spec.fields || []).map((f) => ({
-        name: f.name,
-        relativeSelector: f.relativeSelector,
-      }));
+      group.fields = (spec.fields || []).map((f) => {
+        const entry = {
+          name: f.name,
+          relativeSelector: f.relativeSelector,
+        };
+        if (f.anchorRelativeSelector) entry.anchorRelativeSelector = f.anchorRelativeSelector;
+        else entry.anchorRelativeSelector = f.relativeSelector;
+        return entry;
+      });
+      group.name = String(spec.name || "").trim();
       group.columnOrder = Array.isArray(spec.columnOrder)
         ? spec.columnOrder.slice()
         : group.fields.map((f) => f.name);
@@ -1083,12 +1532,33 @@
         itemSelector: group.itemSelector,
         fields: group.fields,
       };
-      const result = NS.extract.retrieve?.(subRecipe) || {
-        items: [],
-        rows: NS.extract.extractRows(subRecipe),
-      };
-      group.rows = result.rows || [];
-      group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+      try {
+        const scraped = await NS.lazyLoad?.scrapeRecipeWhileScrolling?.(subRecipe, document);
+        if (scraped?.rows) {
+          group.rows = scraped.rows;
+          // Refresh live item handles from the final DOM state when possible.
+          const result = NS.extract.retrieve?.(subRecipe) || { items: [] };
+          group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+          // Prefer merged scroll rows (handles virtualization) over a final DOM snapshot.
+          if (!group.rows.length && result.rows) group.rows = result.rows;
+        } else {
+          await NS.lazyLoad?.revealRecipeItems?.(subRecipe, document);
+          const result = NS.extract.retrieve?.(subRecipe) || {
+            items: [],
+            rows: NS.extract.extractRows(subRecipe),
+          };
+          group.rows = result.rows || [];
+          group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+        }
+      } catch (err) {
+        if (err && err.name !== "AbortError") throw err;
+        const result = NS.extract.retrieve?.(subRecipe) || {
+          items: [],
+          rows: NS.extract.extractRows(subRecipe),
+        };
+        group.rows = result.rows || [];
+        group.liveItems = (result.items || []).filter((n) => n?.nodeType === 1);
+      }
       allItems.push(...group.liveItems);
       built.push(group);
     }

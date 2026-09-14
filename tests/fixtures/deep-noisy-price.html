@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Deep noisy price</title>
+  </head>
+  <body>
+    <!-- Deep PDP/card tree: item root is far above the visible price leaf.
+         Duplicate price text + chrome must not trap Narrower (depth cap regression). -->
+    <div id="dp" class="celwidget">
+      <div id="ppd">
+        <div id="centerCol">
+          <div class="nav-chrome">product page</div>
+          <div id="title_feature_div"><h1>Widget Pro</h1></div>
+          <div id="apex_desktop" class="celwidget">
+            <div class="a-box-group">
+              <div id="corePrice_desktop">
+                <div class="a-section">
+                  <div class="a-price-block">
+                    <span class="a-price" data-a-color="base">
+                      <span class="a-offscreen">$19.99</span>
+                      <span aria-hidden="true">
+                        <span class="a-price-symbol">$</span>
+                        <span class="a-price-whole">19</span>
+                        <span class="a-price-fraction">99</span>
+                      </span>
+                    </span>
+                    <span class="a-price a-text-price">
+                      <span class="a-offscreen">$19.99</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

@@ -175,6 +175,12 @@
       }
 
       if (t.tagName === "INPUT") return;
+      const renameTable = t.closest("[data-cs-rename-table]");
+      if (renameTable && el.contains(renameTable)) {
+        e.preventDefault();
+        startRenameTable(renameTable);
+        return;
+      }
       const rename = t.closest("[data-cs-rename]");
       if (rename && el.contains(rename) && !rename.closest("[data-cs-cell]")) {
         e.preventDefault();
@@ -218,12 +224,54 @@
         return;
       }
       if (t.tagName === "INPUT") return;
+      const renameTable = t.closest("[data-cs-rename-table]");
+      if (renameTable && el.contains(renameTable) && t === renameTable) {
+        e.preventDefault();
+        startRenameTable(renameTable);
+        return;
+      }
       const rename = t.closest("[data-cs-rename]");
       if (rename && el.contains(rename) && t === rename) {
         e.preventDefault();
         startRename(rename);
       }
     });
+  }
+
+  function startRenameTable(labelEl) {
+    if (labelEl.querySelector("input")) return;
+    const groupIndex = parseGroup(labelEl);
+    const oldName = (labelEl.textContent || "").trim();
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "cs-th-input cs-table-name-input";
+    input.value = oldName;
+    input.setAttribute("aria-label", "Rename table");
+    labelEl.replaceChildren(input);
+    input.focus();
+    if (typeof input.select === "function") input.select();
+
+    let done = false;
+    const commit = (save) => {
+      if (done) return;
+      done = true;
+      const next = input.value.trim();
+      labelEl.textContent = oldName;
+      if (save) {
+        callHandler(sessionHandlers, "onRenameTable", groupIndex, next);
+      }
+    };
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        commit(true);
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        commit(false);
+      }
+    });
+    input.addEventListener("blur", () => commit(true));
   }
 
   function startRename(nameEl) {
@@ -237,7 +285,7 @@
     input.setAttribute("aria-label", "Rename column");
     nameEl.replaceChildren(input);
     input.focus();
-    input.select();
+    if (typeof input.select === "function") input.select();
 
     let done = false;
     const commit = (save) => {
@@ -317,8 +365,10 @@
     const editing = rowEditingEnabled && !options.pagination;
     const disabledAttr = editing ? "" : " disabled";
     const tableIndex = Number(gi);
+    const customName = String(options.tableName || options.name || "").trim();
     const tableLabel =
-      Number.isFinite(tableIndex) && tableIndex >= 0 ? `Table ${tableIndex + 1}` : "Preview";
+      customName ||
+      (Number.isFinite(tableIndex) && tableIndex >= 0 ? `Table ${tableIndex + 1}` : "Preview");
 
     const headCells = cols
       .map((c, i) => {
@@ -383,7 +433,7 @@
 
     return `<div class="cs-preview-table${dirty ? " cs-dirty" : ""}"${groupAttr}>
       <div class="cs-table-toolbar">
-        <span class="cs-table-label">${escapeHtml(tableLabel)}</span>
+        <span class="cs-table-label" data-cs-rename-table="1"${groupAttr} tabindex="0" title="Rename table">${escapeHtml(tableLabel)}</span>
         ${dirtyBadge}
       </div>
       <div class="cs-table-scroll">
@@ -416,6 +466,8 @@
           renderTableHtml(t.rows || [], t.columns || [], t.groupIndex ?? i, {
             pagination: opts.pagination,
             rowsDirty: !!t.rowsDirty,
+            name: t.name,
+            tableName: t.tableName || t.name,
           })
         )
         .join("");

@@ -723,8 +723,16 @@
   }
 
   /** Prefer a single content branch when narrowing (wrapper → inner text host). */
-  function preferredNarrowChild(el) {
+  function preferredNarrowChild(el, anchor) {
     if (!(el instanceof Element)) return null;
+    // Walk one step toward the user's original (or last) leaf when possible.
+    if (anchor instanceof Element && el !== anchor && el.contains(anchor)) {
+      let node = anchor;
+      while (node.parentElement && node.parentElement !== el) {
+        node = node.parentElement;
+      }
+      if (node.parentElement === el && isMeaningfulFieldNode(node)) return node;
+    }
     const kids = [...el.children].filter(isMeaningfulFieldNode);
     if (!kids.length) return null;
     if (kids.length === 1) return kids[0];
@@ -744,13 +752,61 @@
   }
 
   /**
-   * Ladder from list item → current field → preferred descendants (max ~8).
+   * Path from `root` down to `leaf` (inclusive), or [] if leaf is not under root.
+   */
+  function pathFromTo(root, leaf) {
+    if (!(root instanceof Element) || !(leaf instanceof Element)) return [];
+    if (root === leaf) return [root];
+    if (!root.contains(leaf)) return [];
+    const down = [];
+    let node = leaf;
+    while (node && node !== root) {
+      down.unshift(node);
+      node = node.parentElement;
+    }
+    if (node !== root) return [];
+    return [root, ...down];
+  }
+
+  /**
+   * Ladder from list item → current field → preferred / anchored descendants.
    * Used for Broader / Narrower nesting adjust.
+   * When `options.anchor` is set, the ladder is the **full** item→anchor path
+   * (no depth cap) so Narrower can always return to the picked leaf on deep cards.
    */
   function fieldTargetLadder(item, currentEl, options = {}) {
     const maxLen = Math.max(2, Number(options.maxLength) || 8);
     if (!(item instanceof Element) || !(currentEl instanceof Element)) return [];
     if (item !== currentEl && !item.contains(currentEl)) return [];
+
+    const anchor =
+      options.anchor instanceof Element &&
+      item.contains(options.anchor) &&
+      options.anchor !== item
+        ? options.anchor
+        : null;
+
+    // Anchored: full path item → … → anchor. Current must lie on that path.
+    if (anchor) {
+      const full = pathFromTo(item, anchor);
+      if (full.includes(currentEl)) return full;
+      // Current left the original branch — build through current, then toward tip.
+      const throughCurrent = pathFromTo(item, currentEl);
+      if (!throughCurrent.length) return [];
+      if (currentEl.contains(anchor)) {
+        const rest = pathFromTo(currentEl, anchor).slice(1);
+        return throughCurrent.concat(rest);
+      }
+      let tip = currentEl;
+      const chain = throughCurrent.slice();
+      while (chain.length < Math.max(maxLen, throughCurrent.length + 6)) {
+        const child = preferredNarrowChild(tip, null);
+        if (!child || chain.includes(child)) break;
+        chain.push(child);
+        tip = child;
+      }
+      return chain;
+    }
 
     const between = [];
     let node = currentEl;
@@ -763,7 +819,7 @@
     const chain = [item, ...between];
     let tip = currentEl;
     while (chain.length < maxLen) {
-      const child = preferredNarrowChild(tip);
+      const child = preferredNarrowChild(tip, null);
       if (!child || chain.includes(child)) break;
       chain.push(child);
       tip = child;
@@ -771,8 +827,8 @@
     return chain;
   }
 
-  function fieldTargetStepInfo(item, currentEl) {
-    const ladder = fieldTargetLadder(item, currentEl);
+  function fieldTargetStepInfo(item, currentEl, options = {}) {
+    const ladder = fieldTargetLadder(item, currentEl, options);
     const index = ladder.indexOf(currentEl);
     return {
       ladder,
@@ -786,9 +842,10 @@
    * @param {Element} item
    * @param {Element} currentEl
    * @param {-1|1|"broader"|"narrower"} direction -1/broader = toward item; 1/narrower = toward leaf
+   * @param {{ anchor?: Element|null }} [options]
    * @returns {Element|null}
    */
-  function stepFieldTarget(item, currentEl, direction) {
+  function stepFieldTarget(item, currentEl, direction, options = {}) {
     const dir =
       direction === -1 || direction === "broader"
         ? -1
@@ -796,7 +853,7 @@
           ? 1
           : 0;
     if (!dir) return null;
-    const { ladder, index } = fieldTargetStepInfo(item, currentEl);
+    const { ladder, index } = fieldTargetStepInfo(item, currentEl, options);
     if (index < 0) return null;
     return ladder[index + dir] || null;
   }
