@@ -19,11 +19,6 @@ describe("bakeoff regression tests", () => {
       assert.ok(titleEl, "fixture must have a title element");
       
       const ctx = ClickScrape.selectors.findListContext(titleEl);
-      console.log("Title context:", {
-        itemsLength: ctx.items.length,
-        itemSelector: ctx.itemSelector,
-        rootSelector: ctx.rootSelector
-      });
 
       assert.ok(ctx.items.length >= 10, `must detect all 10 cards, got ${ctx.items.length}`);
 
@@ -32,11 +27,6 @@ describe("bakeoff regression tests", () => {
       assert.ok(priceEl, "fixture must have a price element");
 
       const priceCtx = ClickScrape.selectors.findListContext(priceEl);
-      console.log("Price context:", {
-        itemsLength: priceCtx.items.length,
-        itemSelector: priceCtx.itemSelector,
-        rootSelector: priceCtx.rootSelector
-      });
 
       assert.ok(priceCtx.items.length >= 10, `must detect all 10 cards from price too, got ${priceCtx.items.length}`);
 
@@ -77,7 +67,6 @@ describe("bakeoff regression tests", () => {
       };
 
       const rows = ClickScrape.extract.extractRows(recipe, document);
-      console.log("First row Name:", rows[0].Name);
 
       // Should extract full title, not truncated ellipsis version
       assert.match(rows[0].Name, /Asus VivoBook X441NA-GA190/, 

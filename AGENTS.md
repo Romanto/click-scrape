@@ -63,7 +63,8 @@ python3 -m http.server 8765   # Load unpacked → http://127.0.0.1:8765/demo.htm
 6. **Broader/Narrower** — On price, Broader then Narrower returns to the same price leaf (anchor).
 7. **Recipes** — Save → popup Run rematches; Edit → Update same `id`; soft nudge copy never asks for an account.
 8. **Privacy** — Grep: no network of scraped rows; SW has no storage/export of scrape payloads.
-9. **Out of scope** — Do not treat missing schedule/cloud/AI as MVP bugs.
+9. **Bake-off fixes** — `tests/fixtures/laptop-grid.html` (title attr extraction + 10/10 cards), `quotes-simple.html` (Walk multi-page); first pick without name → warning flash (no block).
+10. **Out of scope** — Do not treat missing schedule/cloud/AI as MVP bugs.
 
 When reporting: cite **plan claim → observed behavior → file/path → pass/fail**.
 

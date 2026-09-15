@@ -84,14 +84,14 @@ Fixtures worth knowing: `tests/fixtures/noisy-bullets.html`, `deep-noisy-price.h
 
 ### Bake-off lessons (2026-09-15)
 
-Live comparison vs Instant Data Scraper 1.7.1 found gaps now closed:
+Live comparison vs Instant Data Scraper 1.7.1 found gaps; fixes shipped:
 
-- **Card-grid completeness:** Laptop grids (webscraper.io style) now rematch essentially all cards (~117 on live site). Previously missed ~3 items due to list-detection edge cases. Verified: `tests/bakeoff-regression.test.mjs` + `tests/fixtures/laptop-grid.html`.
-- **Truncation:** When display text has ellipsis (`Asus VivoBook...`), extractor now prefers fuller `title` attribute / `aria-label` when available. Verified: title attribute extraction test.
-- **Named columns first:** Gentle warning flash when first pick in a group has no column name — encourages "Title" → click instead of junk "Field 1" accumulation. No hard block (tests still pass).
-- **Walk pagination:** Multi-page quotes fixture confirms Walk dedupe + merge still works cleanly. Verified: `tests/fixtures/quotes-simple.html` + `quotes-page-2.html`.
+- **Truncation (shipped):** When display text has ellipsis (`Asus VivoBook...`), extractor now prefers fuller `title` attribute / `aria-label` when available. Verified: `tests/bakeoff-regression.test.mjs`.
+- **Named columns first (shipped):** Gentle warning flash when first pick in a group has no column name — encourages "Title" → click instead of junk "Field 1" accumulation. No hard block (tests still pass).
+- **Card-grid regression fixture (shipped):** `tests/fixtures/laptop-grid.html` locks 10/10 card detection. **Note:** Live webscraper.io 114→117 gap remains open (no selector changes in this PR); follow-up needed.
+- **Walk pagination fixture (shipped):** Multi-page quotes fixture confirms Walk dedupe + merge still works cleanly. Verified: `tests/fixtures/quotes-simple.html` + `quotes-page-2.html`.
 
-**Takeaway:** Name columns before picking (e.g. "Title" then click); Walk pages only after clean picks. Nestix now matches or exceeds IDS on card grids and named-column workflows.
+**Takeaway:** Name columns before picking (e.g. "Title" then click). Truncation + named-column warnings shipped; card-grid completeness needs selector work (not in this PR).
 
 ---
 
