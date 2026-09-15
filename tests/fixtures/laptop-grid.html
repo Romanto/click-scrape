@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Laptop Grid Test — webscraper.io style card grid</title>
+  <style>
+    body { font: 14px/1.4 sans-serif; margin: 1rem; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    .row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .card { border: 1px solid #ddd; background: #fff; }
+    .card-body { padding: 12px; }
+    .title { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .description { font-size: 12px; color: #666; margin: 6px 0; }
+    .price { float: right; color: #090; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Laptops</h1>
+    <div class="row">
+      
+      <!-- Card 1 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/60" class="title" title="Asus VivoBook X441NA-GA190 14 inch Laptop Silver">
+              Asus VivoBook X441NA-GA190...
+            </a>
+            <p class="description card-text">Asus VivoBook X441NA-GA190 Chocolate Black, 14", Celeron N3450, 4GB, 128GB SSD, ENG kbd</p>
+            <div class="ratings"><p class="review-count float-end">11 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$295.99</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/61" class="title" title="Prestigio SmartBook 133S Dark Grey Laptop Computer">
+              Prestigio SmartBook 133S D...
+            </a>
+            <p class="description card-text">Prestigio SmartBook 133S Dark Grey, 13.3" FHD, Celeron N3350 1.1GHz, 4GB, 32GB SSD, ENG kbd</p>
+            <div class="ratings"><p class="review-count float-end">8 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$299.00</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/62" class="title" title="Prestigio SmartBook 133S Gold Luxury Edition">
+              Prestigio SmartBook 133S G...
+            </a>
+            <p class="description card-text">Prestigio SmartBook 133S Gold, 13.3" FHD, Celeron N3350 1.1GHz, 4GB, 32GB SSD, ENG kbd</p>
+            <div class="ratings"><p class="review-count float-end">12 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$299.00</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/32" class="title" title="Aspire E1-510 Affordable Everyday Computing Laptop">
+              Aspire E1-510...
+            </a>
+            <p class="description card-text">Acer Aspire E1-510 Black, 15.6", Celeron N2920 1.86GHz, 4GB, 500GB, Windows 8.1</p>
+            <div class="ratings"><p class="review-count float-end">9 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$306.99</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 5 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/63" class="title" title="Lenovo V110-15IAP Business Class Laptop with Extended Battery">
+              Lenovo V110-15IAP...
+            </a>
+            <p class="description card-text">Lenovo V110-15IAP Grey, 15.6", Celeron N3350 1.1GHz, 4GB, 128GB SSD, Windows 10 Home</p>
+            <div class="ratings"><p class="review-count float-end">12 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$321.94</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 6 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/64" class="title" title="Dell Inspiron 3552 Premium Pentium Silver Notebook Computer">
+              Dell Inspiron 3552...
+            </a>
+            <p class="description card-text">Dell Inspiron 3552 Grey, 15.6", Pentium N3710 1.6GHz, 4GB, 128GB SSD</p>
+            <div class="ratings"><p class="review-count float-end">10 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$356.49</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 7 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/65" class="title" title="HP 15-bs001nia Jet Black Value Performance Edition">
+              HP 15-bs001nia...
+            </a>
+            <p class="description card-text">HP 15-bs001nia Jet Black, 15.6", Core i3-6006U, 4GB, 500GB, Windows 10 Home</p>
+            <div class="ratings"><p class="review-count float-end">15 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$465.99</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 8 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/66" class="title" title="Lenovo IdeaPad 320-15ABR Platinum Grey Professional Workstation">
+              Lenovo IdeaPad 320-15ABR...
+            </a>
+            <p class="description card-text">Lenovo IdeaPad 320-15ABR Platinum Grey, 15.6", AMD A12-9720P, 6GB, 1TB, Windows 10 Home</p>
+            <div class="ratings"><p class="review-count float-end">13 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$511.95</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 9 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/67" class="title" title="Acer Aspire 3 A315-51 Steel Gray High Performance Computing Laptop">
+              Acer Aspire 3 A315-51...
+            </a>
+            <p class="description card-text">Acer Aspire 3 A315-51 Steel Gray, 15.6", Core i3-6006U, 4GB, 1TB, Linux</p>
+            <div class="ratings"><p class="review-count float-end">7 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$450.00</h4>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 10 -->
+      <div class="col-md-4">
+        <div class="card thumbnail">
+          <div class="product-wrapper card-body">
+            <a href="/product/68" class="title" title="MSI GV62 7RD-2421XES Black Gaming Laptop with GTX Graphics">
+              MSI GV62 7RD-2421XES...
+            </a>
+            <p class="description card-text">MSI GV62 7RD-2421XES Black, 15.6" FHD, Core i5-7300HQ, 8GB, 1TB + 128GB SSD, GTX 1050</p>
+            <div class="ratings"><p class="review-count float-end">14 reviews</p></div>
+            <h4 class="price float-end card-title pull-right">$1139.95</h4>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>
