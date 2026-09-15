@@ -88,10 +88,11 @@ Live comparison vs Instant Data Scraper 1.7.1 found gaps; fixes shipped:
 
 - **Truncation (shipped):** When display text has ellipsis (`Asus VivoBook...`), extractor now prefers fuller `title` attribute / `aria-label` when available. Verified: `tests/bakeoff-regression.test.mjs`.
 - **Named columns first (shipped):** Gentle warning flash when first pick in a group has no column name — encourages "Title" → click instead of junk "Field 1" accumulation. No hard block (tests still pass).
-- **Card-grid regression fixture (shipped):** `tests/fixtures/laptop-grid.html` locks 10/10 card detection. **Note:** Live webscraper.io 114→117 gap remains open (no selector changes in this PR); follow-up needed.
+- **Card-grid completeness (shipped):** `tests/fixtures/laptop-grid.html` + live webscraper.io laptops → **117/117** rows. Merge dedupe now keys on product `href` (`__itemId`) so identical Name|Price cards stay distinct; quotes Walk still collapses true duplicates.
+- **Books Title|Price (shipped):** `tests/fixtures/books-product-pod.html` — picking `h3` or titled links yields full titles (descendant `title` attr) + prices; Walk stays aligned.
 - **Walk pagination fixture (shipped):** Multi-page quotes fixture confirms Walk dedupe + merge still works cleanly. Verified: `tests/fixtures/quotes-simple.html` + `quotes-page-2.html`.
 
-**Takeaway:** Name columns before picking (e.g. "Title" then click). Truncation + named-column warnings shipped; card-grid completeness needs selector work (not in this PR).
+**Takeaway:** Name columns before picking (e.g. "Title" then click). Truncation, named-column warnings, books titles, and laptop 117 completeness are covered by bake-off regressions.
 
 ---
 

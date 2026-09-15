@@ -181,20 +181,27 @@
 
   function rowKey(row, columns) {
     const cols = Array.isArray(columns) && columns.length ? columns : Object.keys(row || {});
-    return cols.map((c) => String((row && row[c]) ?? "")).join(ROW_SEP);
+    const visible = cols
+      .filter((c) => c !== "__itemId")
+      .map((c) => String((row && row[c]) ?? ""))
+      .join(ROW_SEP);
+    const id = row && row.__itemId != null ? String(row.__itemId) : "";
+    return id ? `${visible}${ROW_SEP}${id}` : visible;
   }
 
   function mergeRows(existing, incoming, columns) {
-    const cols = Array.isArray(columns) ? columns.slice() : [];
+    const cols = Array.isArray(columns) ? columns.slice().filter((c) => c !== "__itemId") : [];
     if (!cols.length) return [];
     const result = [];
     const seen = new Set();
     const add = (row) => {
       const projected = projectRow(row, cols);
-      const key = rowKey(projected, cols);
+      const id = row && row.__itemId != null ? String(row.__itemId) : "";
+      const key = rowKey({ ...projected, __itemId: id }, cols);
       if (seen.has(key)) return;
       seen.add(key);
-      result.push(projected);
+      // Retain identity for later merge rounds; export projects columns only.
+      result.push(id ? { ...projected, __itemId: id } : projected);
     };
     for (const row of existing || []) add(row);
     for (const row of incoming || []) add(row);
