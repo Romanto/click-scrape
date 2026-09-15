@@ -526,7 +526,19 @@
     }
 
     const nameInput = document.getElementById("cs-field-name");
-    const name = (nameInput?.value || "").trim() || `Field ${group.fields.length + 1}`;
+    const enteredName = (nameInput?.value || "").trim();
+    const name = enteredName || `Field ${group.fields.length + 1}`;
+    
+    // Warn if no column name provided for first field in a new group
+    if (group.fields.length === 0 && !enteredName && nameInput) {
+      nameInput.classList.add("cs-required-flash");
+      const origPlaceholder = nameInput.placeholder;
+      nameInput.placeholder = "⚠️ Tip: Name columns before picking (e.g. Title)";
+      setTimeout(() => {
+        nameInput.classList.remove("cs-required-flash");
+        nameInput.placeholder = origPlaceholder;
+      }, 3000);
+    }
 
     let item = itemContaining(group.liveItems, el);
     item = item || ctxItems.find((i) => i === el || i.contains(el)) || el;

@@ -212,6 +212,19 @@ html.click-scrape-picking #click-scrape-overlay * {
   box-shadow: 0 0 0 3px rgba(157, 88, 227, 0.1) !important;
 }
 
+#click-scrape-overlay input.cs-required-flash {
+  border-color: #f59e0b !important;
+  background: #fffbeb !important;
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15) !important;
+  animation: cs-flash-shake 0.3s ease !important;
+}
+
+@keyframes cs-flash-shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
 #click-scrape-overlay .cs-preview-table {
   margin-top: 10px !important;
   padding: 10px !important;

@@ -7,6 +7,41 @@
       .trim();
   }
 
+  /**
+   * Extract text from an element, preferring fuller sources when the display text is truncated.
+   * Order of preference:
+   * 1. title attribute (often contains full text when display is ellipsis-truncated)
+   * 2. aria-label (accessible alternative text)
+   * 3. textContent (actual display text)
+   */
+  function extractText(el) {
+    if (!(el instanceof Element)) return "";
+    
+    const textContent = normalizeText(el.textContent);
+    
+    // If element has a title attribute with meaningful content, prefer it
+    const title = el.getAttribute("title");
+    if (title) {
+      const normalizedTitle = normalizeText(title);
+      // Use title if it's longer than textContent or if textContent has ellipsis
+      if (normalizedTitle && (normalizedTitle.length > textContent.length || textContent.includes("..."))) {
+        return normalizedTitle;
+      }
+    }
+    
+    // Check aria-label as second preference
+    const ariaLabel = el.getAttribute("aria-label");
+    if (ariaLabel) {
+      const normalizedLabel = normalizeText(ariaLabel);
+      // Use aria-label if it's longer than textContent or if textContent has ellipsis
+      if (normalizedLabel && (normalizedLabel.length > textContent.length || textContent.includes("..."))) {
+        return normalizedLabel;
+      }
+    }
+    
+    return textContent;
+  }
+
   function queryField(item, relativeSelector) {
     const rel = (relativeSelector || "").trim();
     if (!rel || rel === ":scope") return item;
@@ -59,7 +94,7 @@
       } catch {
         el = null;
       }
-      row[field.name] = normalizeText(el?.textContent);
+      row[field.name] = extractText(el);
     }
     return row;
   }

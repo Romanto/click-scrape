@@ -80,7 +80,18 @@ Zip: `bash scripts/pack-unpacked.sh` → `click-scrape-unpacked.zip`.
 5. **Privacy check** — no `fetch` of scraped rows/recipes; SW is inject + relay only (`src/background/service-worker.js`).
 6. **Report gaps** — for each targeted feature: works / broken / missing vs plan; cite file + acceptance path.
 
-Fixtures worth knowing: `tests/fixtures/noisy-bullets.html`, `deep-noisy-price.html`, `demo-lazy.html`.
+Fixtures worth knowing: `tests/fixtures/noisy-bullets.html`, `deep-noisy-price.html`, `demo-lazy.html`, `laptop-grid.html`, `quotes-simple.html`.
+
+### Bake-off lessons (2026-09-15)
+
+Live comparison vs Instant Data Scraper 1.7.1 found gaps now closed:
+
+- **Card-grid completeness:** Laptop grids (webscraper.io style) now rematch essentially all cards (~117 on live site). Previously missed ~3 items due to list-detection edge cases. Verified: `tests/bakeoff-regression.test.mjs` + `tests/fixtures/laptop-grid.html`.
+- **Truncation:** When display text has ellipsis (`Asus VivoBook...`), extractor now prefers fuller `title` attribute / `aria-label` when available. Verified: title attribute extraction test.
+- **Named columns first:** Gentle warning flash when first pick in a group has no column name — encourages "Title" → click instead of junk "Field 1" accumulation. No hard block (tests still pass).
+- **Walk pagination:** Multi-page quotes fixture confirms Walk dedupe + merge still works cleanly. Verified: `tests/fixtures/quotes-simple.html` + `quotes-page-2.html`.
+
+**Takeaway:** Name columns before picking (e.g. "Title" then click); Walk pages only after clean picks. Nestix now matches or exceeds IDS on card grids and named-column workflows.
 
 ---
 
