@@ -10,36 +10,71 @@
   /**
    * Extract text from an element, preferring fuller sources when the display text is truncated.
    * Order of preference:
-   * 1. title attribute (often contains full text when display is ellipsis-truncated)
-   * 2. aria-label (accessible alternative text)
-   * 3. textContent (actual display text)
+   * 1. own title / aria-label when fuller than textContent (or text has ellipsis)
+   * 2. descendant [title] / [aria-label] when own text is empty or ellipsis-truncated
+   * 3. textContent
    */
+  function attrText(el, attr) {
+    if (!(el instanceof Element)) return "";
+    try {
+      return normalizeText(el.getAttribute(attr));
+    } catch {
+      return "";
+    }
+  }
+
+  function preferFiller(textContent, filler) {
+    if (!filler) return null;
+    if (!textContent || textContent.includes("...") || filler.length > textContent.length) {
+      return filler;
+    }
+    return null;
+  }
+
   function extractText(el) {
     if (!(el instanceof Element)) return "";
-    
+
     const textContent = normalizeText(el.textContent);
-    
-    // If element has a title attribute with meaningful content, prefer it
-    const title = el.getAttribute("title");
-    if (title) {
-      const normalizedTitle = normalizeText(title);
-      // Use title if it's longer than textContent or if textContent has ellipsis
-      if (normalizedTitle && (normalizedTitle.length > textContent.length || textContent.includes("..."))) {
-        return normalizedTitle;
-      }
+
+    for (const attr of ["title", "aria-label"]) {
+      const preferred = preferFiller(textContent, attrText(el, attr));
+      if (preferred) return preferred;
     }
-    
-    // Check aria-label as second preference
-    const ariaLabel = el.getAttribute("aria-label");
-    if (ariaLabel) {
-      const normalizedLabel = normalizeText(ariaLabel);
-      // Use aria-label if it's longer than textContent or if textContent has ellipsis
-      if (normalizedLabel && (normalizedLabel.length > textContent.length || textContent.includes("..."))) {
-        return normalizedLabel;
+
+    // Picking an h3 (or similar wrapper) whose child a[title] holds the full name.
+    if (!textContent || textContent.includes("...")) {
+      let best = "";
+      try {
+        const nodes = el.querySelectorAll("a[title], [title], [aria-label]");
+        for (const node of nodes) {
+          for (const attr of ["title", "aria-label"]) {
+            const v = attrText(node, attr);
+            if (v && v.length > best.length) best = v;
+          }
+        }
+      } catch {
+        /* ignore */
       }
+      const preferred = preferFiller(textContent, best);
+      if (preferred) return preferred;
     }
-    
+
     return textContent;
+  }
+
+  /** Stable per-item identity for merge dedupe (not exported). */
+  function itemIdentity(item) {
+    if (!(item instanceof Element)) return "";
+    try {
+      const link =
+        item.querySelector("a.title[href]") ||
+        item.querySelector("h3 a[href]") ||
+        item.querySelector("a[href]");
+      const href = link?.getAttribute?.("href");
+      return href ? String(href).trim() : "";
+    } catch {
+      return "";
+    }
   }
 
   function queryField(item, relativeSelector) {
@@ -96,6 +131,8 @@
       }
       row[field.name] = extractText(el);
     }
+    const id = itemIdentity(item);
+    if (id) row.__itemId = id;
     return row;
   }
 
@@ -158,6 +195,9 @@
   }
 
   NS.extract = {
+    normalizeText,
+    extractText,
+    itemIdentity,
     queryField,
     resolveRoot,
     retrieveItems,

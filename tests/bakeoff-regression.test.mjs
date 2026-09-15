@@ -9,7 +9,7 @@ import {
 
 describe("bakeoff regression tests", () => {
   describe("laptop grid card completeness", () => {
-    it("Name+Price pick should capture all 10 cards", () => {
+    it("Name+Price pick should capture all cards including duplicate visible keys", () => {
       const html = loadFixture("laptop-grid.html");
       const { window, document } = createDocument(html);
       const ClickScrape = loadClickScrape(window);
@@ -20,7 +20,7 @@ describe("bakeoff regression tests", () => {
       
       const ctx = ClickScrape.selectors.findListContext(titleEl);
 
-      assert.ok(ctx.items.length >= 10, `must detect all 10 cards, got ${ctx.items.length}`);
+      assert.ok(ctx.items.length >= 12, `must detect all 12 cards, got ${ctx.items.length}`);
 
       // Pick from first card's price
       const priceEl = document.querySelector(".price");
@@ -28,7 +28,7 @@ describe("bakeoff regression tests", () => {
 
       const priceCtx = ClickScrape.selectors.findListContext(priceEl);
 
-      assert.ok(priceCtx.items.length >= 10, `must detect all 10 cards from price too, got ${priceCtx.items.length}`);
+      assert.ok(priceCtx.items.length >= 12, `must detect all 12 cards from price too, got ${priceCtx.items.length}`);
 
       // Verify the title field resolves on all items
       const sampleItem = ctx.items[0];
@@ -75,6 +75,135 @@ describe("bakeoff regression tests", () => {
       // Should NOT contain ellipsis
       assert.ok(!rows[0].Name.includes("..."), 
         "Extracted text should not contain ellipsis from display text");
+    });
+
+    it("keeps two cards with identical Name|Price when hrefs differ", async () => {
+      const html = loadFixture("laptop-grid.html");
+      const { window, document } = createDocument(html);
+      const ClickScrape = loadClickScrape(window);
+
+      const titleEl = document.querySelector(".title");
+      const priceEl = document.querySelector(".price");
+      const ctx = ClickScrape.selectors.findListContext(titleEl);
+      const sampleItem = ctx.items[0];
+      const recipe = {
+        rootSelector: ctx.rootSelector,
+        itemSelector: ctx.itemSelector,
+        fields: [
+          {
+            name: "Name",
+            relativeSelector: ClickScrape.selectors.relativeSelector(sampleItem, titleEl),
+          },
+          {
+            name: "Price",
+            relativeSelector: ClickScrape.selectors.relativeSelector(sampleItem, priceEl),
+          },
+        ],
+      };
+
+      const extracted = ClickScrape.extract.extractRows(recipe, document);
+      assert.equal(extracted.length, 12, "extractRows should keep all 12 cards");
+
+      const dupes = extracted.filter((r) => r.Name === "MSI GL72M 7RDX" && r.Price === "$1099");
+      assert.equal(dupes.length, 2, "fixture must include two MSI rows with same visible columns");
+      assert.notEqual(dupes[0].__itemId, dupes[1].__itemId, "duplicate visible rows need distinct __itemId");
+
+      const merged = ClickScrape.pagination.mergeRows([], extracted, ["Name", "Price"]);
+      assert.equal(merged.length, 12, "mergeRows must not collapse distinct hrefs");
+
+      const scraped = await ClickScrape.lazyLoad.scrapeRecipeWhileScrolling(recipe, document, {
+        settleMs: 1,
+        stableRounds: 2,
+        maxRounds: 5,
+        wait: async () => {},
+        columns: ["Name", "Price"],
+      });
+      assert.equal(scraped.rows.length, 12, "scroll-merge must keep 12 rows");
+    });
+  });
+
+  describe("books.toscrape product_pod Title|Price", () => {
+    it("Title on h3 + Price yield full titles and prices", () => {
+      const html = loadFixture("books-product-pod.html");
+      const { window, document } = createDocument(html);
+      const ClickScrape = loadClickScrape(window);
+
+      const h3 = document.querySelector("article.product_pod h3");
+      const priceEl = document.querySelector("article.product_pod .price_color");
+      const ctx = ClickScrape.selectors.findListContext(h3);
+      assert.ok(ctx.items.length >= 3, `expected product pods, got ${ctx.items.length}`);
+
+      const item = ctx.items.find((i) => i.contains(h3)) || ctx.items[0];
+      const titleRel = ClickScrape.selectors.relativeSelector(item, h3);
+      const priceRel = ClickScrape.selectors.relativeSelector(item, priceEl);
+
+      assert.match(titleRel, /a/i, "Title relative selector should target the titled anchor, not bare h3 only");
+      assert.notEqual(titleRel.trim(), ":scope a", "must not save ambiguous :scope a (image link)");
+
+      const recipe = {
+        rootSelector: ctx.rootSelector,
+        itemSelector: ctx.itemSelector,
+        fields: [
+          { name: "Title", relativeSelector: titleRel },
+          { name: "Price", relativeSelector: priceRel },
+        ],
+      };
+      const rows = ClickScrape.extract.extractRows(recipe, document);
+      assert.equal(rows.length, 3);
+      assert.equal(rows[0].Title, "A Light in the Attic");
+      assert.ok(!rows[0].Title.includes("..."), "title must not stay truncated");
+      assert.equal(rows[0].Price, "£51.77");
+      assert.equal(rows[1].Title, "Tipping the Velvet");
+      assert.equal(rows[1].Price, "£53.74");
+    });
+
+    it("Title on h3 a + Price walk-merge page 2 stays aligned", async () => {
+      const page1 = loadFixture("books-product-pod.html");
+      const page2 = loadFixture("books-page-2.html");
+      const { window, document } = createDocument(page1);
+      const ClickScrape = loadClickScrape(window);
+      const { document: doc2 } = createDocument(page2);
+
+      const titleEl = document.querySelector("article.product_pod h3 a");
+      const priceEl = document.querySelector("article.product_pod .price_color");
+      const ctx = ClickScrape.selectors.findListContext(titleEl);
+      const item = ctx.items.find((i) => i.contains(titleEl)) || ctx.items[0];
+      const recipe = {
+        rootSelector: ctx.rootSelector,
+        itemSelector: ctx.itemSelector,
+        fields: [
+          {
+            name: "Title",
+            relativeSelector: ClickScrape.selectors.relativeSelector(item, titleEl),
+          },
+          {
+            name: "Price",
+            relativeSelector: ClickScrape.selectors.relativeSelector(item, priceEl),
+          },
+        ],
+      };
+
+      const result = await ClickScrape.pagination.walkPages(recipe, document, {
+        currentUrl: "https://example.com/books-product-pod.html",
+        maxPages: 2,
+        fetchPage: async () => doc2,
+      });
+
+      assert.equal(result.pages, 2);
+      assert.equal(result.rows.length, 5);
+      assert.equal(result.rows[0].Title, "A Light in the Attic");
+      assert.equal(result.rows[0].Price, "£51.77");
+      assert.equal(result.rows[3].Title, "In Her Wake");
+      assert.equal(result.rows[3].Price, "£12.84");
+      assert.ok(result.rows.every((r) => r.Title && r.Price && !String(r.Title).includes("...")));
+    });
+
+    it("extractText on h3 prefers descendant a[title]", () => {
+      const html = loadFixture("books-product-pod.html");
+      const { window, document } = createDocument(html);
+      const ClickScrape = loadClickScrape(window);
+      const h3 = document.querySelector("article.product_pod h3");
+      assert.equal(ClickScrape.extract.extractText(h3), "A Light in the Attic");
     });
   });
 

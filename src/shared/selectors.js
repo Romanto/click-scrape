@@ -638,11 +638,50 @@
     return ctx.items.find((i) => i === fieldEl || i.contains(fieldEl)) || ctx.items[0] || item;
   }
 
+  /** Prefer a titled product link leaf when the user clicked an h3/wrapper. */
+  function preferFieldLeaf(fieldEl) {
+    if (!(fieldEl instanceof Element)) return fieldEl;
+    try {
+      if (fieldEl.matches?.("a[title]")) return fieldEl;
+      const titled = fieldEl.querySelectorAll?.("a[title]");
+      if (titled && titled.length === 1) return titled[0];
+    } catch {
+      /* keep original */
+    }
+    return fieldEl;
+  }
+
+  /**
+   * When a bare `:scope a` would hit the image link first, prefer the titled title link.
+   */
+  function disambiguateAnchorPath(from, fieldEl, path) {
+    const trimmed = String(path || "").trim();
+    if (!/^:scope\s+a$/i.test(trimmed)) return path;
+    if (!(from instanceof Element)) return path;
+    try {
+      const anchors = from.querySelectorAll("a");
+      if (anchors.length < 2) return path;
+      const titled =
+        from.querySelector("h3 a[title]") ||
+        from.querySelector("a.title[title]") ||
+        from.querySelector("a[title]");
+      if (titled && from.contains(titled) && (fieldEl === titled || fieldEl?.contains?.(titled) || titled.contains?.(fieldEl))) {
+        return relativePathFrom(from, titled);
+      }
+      if (titled && from.contains(titled)) return relativePathFrom(from, titled);
+    } catch {
+      /* keep path */
+    }
+    return path;
+  }
+
   function relativeSelector(item, fieldEl) {
     if (!(fieldEl instanceof Element)) return ":scope";
     const from = containingItem(item, fieldEl);
     if (!(from instanceof Element)) return ":scope";
-    return relativePathFrom(from, fieldEl);
+    const leaf = preferFieldLeaf(fieldEl);
+    const path = relativePathFrom(from, leaf);
+    return disambiguateAnchorPath(from, leaf, path);
   }
 
   function topLevelMatches(root, selector) {
