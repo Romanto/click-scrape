@@ -17,6 +17,7 @@ rm -f "$OUT"
     README.md \
     demo.html \
     demo-page-2.html \
+    demo-lazy.html \
     src \
     icons \
     -x "*.DS_Store" \
