@@ -1,5 +1,5 @@
 (() => {
-  const BOOT = "smooth-hover-v1";
+  const BOOT = "stale-hover-pick-v1";
   if (globalThis.__clickScrapeBoot === BOOT) {
     return;
   }
@@ -474,12 +474,36 @@
     return state.groups.length - 1;
   }
 
+  function resolvePickElement(e) {
+    // Prefer the node under the pointer at click time so sticky hover cannot
+    // toggle-drop the previously selected field (Title stuck → click Price).
+    const fromPoint =
+      typeof document.elementFromPoint === "function"
+        ? document.elementFromPoint(e?.clientX ?? 0, e?.clientY ?? 0)
+        : null;
+    if (fromPoint instanceof Element && fromPoint.isConnected !== false && !isOverlay(fromPoint)) {
+      return fromPoint;
+    }
+    const target = e?.target;
+    if (target instanceof Element && target.isConnected !== false && !isOverlay(target)) {
+      return target;
+    }
+    if (
+      state.hoverEl instanceof Element &&
+      state.hoverEl.isConnected !== false &&
+      !isOverlay(state.hoverEl)
+    ) {
+      return state.hoverEl;
+    }
+    return null;
+  }
+
   function onClick(e) {
     if (!state.active || isOverlayEvent(e)) return;
     e.preventDefault();
     e.stopPropagation();
     if (state.walking) return;
-    const el = state.hoverEl || e.target;
+    const el = resolvePickElement(e);
     if (!(el instanceof Element) || isOverlay(el) || !el.isConnected) return;
 
     const ctx = NS.selectors.findListContext(el);
@@ -582,15 +606,15 @@
   function groupColumns(group) {
     if (!group) return [];
     const hidden = new Set(group.hiddenColumns);
-    const order = group.columnOrder.slice();  // Create a copy instead of mutating
+    // Copy before appending missing names so callers never share a live array alias.
+    const order = group.columnOrder.slice();
     const inOrder = new Set(order);
     for (const f of group.fields) {
       if (!inOrder.has(f.name) && !hidden.has(f.name)) {
-        order.push(f.name);  // Push to the copy
+        order.push(f.name);
         inOrder.add(f.name);
       }
     }
-    // Update group.columnOrder with the new order
     group.columnOrder = order;
     const names = new Set(group.fields.map((f) => f.name));
     return NS.columns.visibleColumns(order, group.hiddenColumns).filter((n) => names.has(n));

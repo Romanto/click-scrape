@@ -213,4 +213,42 @@ describe("preview column order (e2e Title→Price)", () => {
     assert.equal(row0Cells[0], "$12.00", "first column should be Price value");
     assert.equal(row0Cells[1], "Acme Notebook", "second column should be Title value");
   });
+
+  it("click Price while hover stuck on Title still adds Price (no toggle-drop)", () => {
+    const html = loadFixture("nested-cards.html");
+    const { document, startPicker, pick, fire } = loadPicker(html);
+
+    startPicker();
+
+    const nameInput = document.getElementById("cs-field-name");
+    const titleEl = document.querySelector("article.product span.title");
+    const priceEl = document.querySelector("article.product span.price");
+    assert.ok(titleEl && priceEl);
+
+    nameInput.value = "Title";
+    pick(titleEl);
+
+    // Stick hover on the selected Title (sticky hover thrash scenario).
+    document.elementFromPoint = () => titleEl;
+    fire(titleEl, "mousemove");
+
+    // Click Price under the pointer without moving hover onto Price first.
+    nameInput.value = "Price";
+    document.elementFromPoint = () => priceEl;
+    fire(priceEl, "click");
+
+    const tables = document.querySelectorAll("#cs-preview .cs-preview-table");
+    assert.equal(tables.length, 1, "must keep one table (Title must not be toggle-dropped)");
+
+    const headers = [...document.querySelectorAll("#cs-preview thead th .cs-th-name")].map((span) =>
+      span.textContent.trim()
+    );
+    assert.deepEqual(headers, ["Title", "Price"]);
+
+    const row0Cells = [...document.querySelectorAll("#cs-preview tbody tr")[0].querySelectorAll("td.cs-cell")].map(
+      (td) => td.textContent.trim()
+    );
+    assert.equal(row0Cells[0], "Acme Notebook");
+    assert.equal(row0Cells[1], "$12.00");
+  });
 });
